@@ -47,7 +47,7 @@
 
 插件标识：`qsl-grid-map`
 
-插件显示名称：`QSL 通联网格地图`
+插件显示名称：`业余无线电 GardMap 通联网格地图`
 
 当前版本：`0.0.15`
 
@@ -429,3 +429,20 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids?sceneType=QSO
 | Controller 页面接口带认证可访问，但匿名访问被 Halo 拦截 | 新增只匹配 `GET /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page` 的 `BeforeSecurityWebFilter` | 匿名访问返回地图页面，不进入登录页 |
 | 请求链路曾使用同步 `SettingFetcher（设置读取器）` 读取配置 | 改为 Halo 官方 `ReactiveSettingFetcher（响应式设置读取器）` | 避免 Reactor HTTP 线程阻塞，天地图配置可在匿名页面正常生效 |
 | 数据加载完成后自动 `fitBounds（适配范围）` 到全量通联网格，导致默认中心点被覆盖 | 移除有数据时的自动视图移动，只绘制网格图层 | 后台 `defaultCenterGrid（默认中心网格）` 与 `defaultZoom（默认缩放级别）` 在刷新后保持生效 |
+
+## 17. CI/CD
+
+CI/CD 复用 `halo-sigs/reusable-workflows`：
+
+| 文件 | 触发条件 | 说明 |
+| --- | --- | --- |
+| `.github/workflows/ci.yaml` | `push（推送）` 与 `pull_request（拉取请求）` 到 `main` | 执行 Halo 插件 CI 构建检查 |
+| `.github/workflows/cd.yaml` | GitHub Release `published（已发布）` | 使用仓库密钥 `HALO_PAT` 发布插件 Release 产物，并提交到 Halo 应用市场 |
+
+CD 参数：
+
+1. `app-id（应用市场应用标识）= app-rftgoicv`
+2. `ui-path（前端目录）= ui`
+3. `pnpm-version（pnpm 版本）= 10`
+4. `node-version（Node.js 版本）= 24`
+5. `java-version（Java 版本）= 21`

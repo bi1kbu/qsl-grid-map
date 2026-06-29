@@ -1,4 +1,4 @@
-# QSL 通联网格地图项目文档索引
+# 业余无线电 GardMap 通联网格地图项目文档索引
 
 本文档是 `qsl-grid-map` 插件的结构化文档入口。
 
@@ -14,14 +14,15 @@
 ## 当前实现摘要
 
 1. 插件标识：`qsl-grid-map`
-2. 插件显示名称：`QSL 通联网格地图`
-3. 当前版本：`0.0.16`
+2. 插件显示名称：`业余无线电 GardMap 通联网格地图`
+3. 当前版本：`0.0.17`
 4. Halo 目标版本：`>=2.25.0`
 5. 强依赖插件：`qsl-management >=2.3.21`
 6. 唯一插件 API：`GET /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page`
 7. 数据来源：`GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids`
 8. 短码：`[qsl-grid-map]`
 9. 编辑器小组件：默认编辑器输入 `/` 后选择 `QSL 通联网格地图`，编辑态显示预览卡片，保存层保留 `[qsl-grid-map]`
+10. CI/CD：复用 `halo-sigs/reusable-workflows`；CI 在 `main` 分支推送与 Pull Request 触发，CD 在 GitHub Release 发布时触发并发布到 Halo 应用市场 `app-rftgoicv`
 
 ## 最近验证
 

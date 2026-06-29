@@ -1,6 +1,6 @@
-# qsl-grid-map
+# 业余无线电 GardMap 通联网格地图
 
-QSL 通联网格地图是一个 Halo 2 前台展示插件，用于把 `qsl-management` 已公开的通联网格数据展示为交互地图。
+业余无线电 GardMap 通联网格地图是一个 Halo 2 前台展示插件，用于把 `qsl-management` 已公开的通联网格数据展示为交互地图。
 
 ## 简介
 
@@ -73,7 +73,7 @@ http://localhost:8091
 当前产物示例：
 
 ```text
-build/libs/plugin-qsl-grid-map-0.0.4.jar
+build/libs/plugin-qsl-grid-map-0.0.17.jar
 ```
 
 ## 许可证

@@ -1,0 +1,33 @@
+apiVersion: v1alpha1
+kind: Setting
+metadata:
+  name: qsl-grid-map-setting
+spec:
+  forms:
+    - group: tianditu
+      label: 天地图服务
+      formSchema:
+        - $formkit: text
+          name: appKey
+          label: 应用 key
+          validation: required
+          help: 请在天地图服务中心控制台创建浏览器端应用后填写应用 key。
+        - $formkit: password
+          name: secretKey
+          label: 密钥
+          help: 可选。当前地图瓦片请求仅使用应用 key，密钥不会输出到前台页面。
+    - group: map
+      label: 地图显示
+      formSchema:
+        - $formkit: text
+          name: defaultCenterGrid
+          label: 默认中心网格
+          value: OM89
+          validation: required|matches:/^[A-Ra-r]{2}[0-9]{2}$/
+          help: 页面初始加载和无数据时使用的四位 Maidenhead 网格，默认 OM89（中国北京）。
+        - $formkit: number
+          name: defaultZoom
+          label: 默认缩放级别
+          value: 3
+          validation: required|min:1|max:18
+          help: 页面初始加载和无数据时使用的地图缩放级别，默认 3。

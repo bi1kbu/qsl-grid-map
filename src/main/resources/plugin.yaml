@@ -1,0 +1,27 @@
+# 参考文档：https://docs.halo.run/developer-guide/plugin/basics/manifest
+
+apiVersion: plugin.halo.run/v1alpha1
+kind: Plugin
+metadata:
+  # 插件唯一标识名（用于系统内部识别）
+  name: qsl-grid-map
+spec:
+  enabled: true
+  version: 0.0.7
+  requires: ">=2.25.0"
+  pluginDependencies:
+    qsl-management: ">=2.3.21"
+  settingName: qsl-grid-map-setting
+  configMapName: qsl-grid-map-config
+  author:
+    name: bi1kbu
+    website: https://github.com/bi1kbu
+  logo: logo.png
+  homepage: https://github.com/bi1kbu/qsl-grid-map#readme
+  repo: https://github.com/bi1kbu/qsl-grid-map
+  issues: https://github.com/bi1kbu/qsl-grid-map/issues
+  displayName: "QSL 通联网格地图"
+  description: "业余无线电系列插件(2)：基于 qsl-management 公开网格接口展示通联网格地图"
+  license:
+    - name: "GPL-3.0"
+      url: "https://github.com/bi1kbu/qsl-grid-map/blob/main/LICENSE"

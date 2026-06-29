@@ -39,6 +39,7 @@
 3. Halo 自定义 Controller API 默认只允许超级管理员访问；若使用 Controller 承载公开页面，需要额外处理匿名访问策略。
 4. 当前需求明确“不创建角色模板”，因此公开页面接口不应依赖匿名聚合 Role 模板作为常规方案。
 5. 短码替换应基于 Halo 主题端文章内容处理与主题端自定义页面内容处理扩展点完成。
+6. 文章和页面编辑器 `/` 菜单入口应基于 Halo 默认编辑器 UI 扩展点 `default:editor:extension:create` 注册，菜单动作只插入 `[qsl-grid-map]` 短码文本。
 6. Halo 2.25 插件上下文会注册 `reactiveSettingFetcher（响应式设置读取器）` 与 `settingFetcher（同步设置读取器）`；请求处理链路使用 `ReactiveSettingFetcher（响应式设置读取器）`，避免在 Reactor HTTP 线程中阻塞。
 7. `DefaultReactiveSettingFetcher（默认响应式设置读取实现）` 通过插件 `configMapName（配置名称）` 对应的 ConfigMap 读取设置数据，因此本插件不直接读取 ConfigMap，也不维护额外配置接口。
 
@@ -48,7 +49,7 @@
 
 插件显示名称：`QSL 通联网格地图`
 
-当前版本：`0.0.14`
+当前版本：`0.0.15`
 
 插件类型：Halo 2 前台展示插件。
 
@@ -109,7 +110,7 @@
 
 ## 6. 短码设计
 
-第一版提供短码和页面链接两个前台入口。
+第一版提供短码、编辑器小组件和页面链接三个前台入口。
 
 页面链接：
 
@@ -137,6 +138,13 @@
 ```
 
 短码不再解析筛选属性；即使内容中保留旧属性，也不会拼接到 iframe 地址或影响地图数据请求。
+
+编辑器小组件：
+
+1. 在 Halo 默认编辑器中输入 `/` 后，提供 `QSL 通联网格地图` 菜单项。
+2. 菜单项通过 UI 扩展点 `default:editor:extension:create` 注册 Tiptap 扩展。
+3. 点击菜单项只向编辑器当前位置插入 `[qsl-grid-map]`。
+4. 小组件不新增服务端接口，不读取业务数据，不绕过短码渲染逻辑。
 
 ## 7. 页面功能
 
@@ -252,6 +260,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 | --- | --- | --- | --- |
 | 公开地图页面 | 无 | 无 | 匿名只读页面，不进入后台权限分配 |
 | 短码嵌入 | 无 | 无 | 通过主题端内容处理替换为 iframe |
+| 编辑器小组件 | 无 | 无 | 通过 Halo 默认编辑器 UI 扩展插入 `[qsl-grid-map]` 文本 |
 | 数据读取 | 复用 `qsl-management` 公开接口权限 | 不由本插件维护 | 本插件不自行维护数据接口 |
 | 天地图配置 | 复用 Halo Console 插件设置权限 | 本插件不创建 | `appKey（应用 key）` 必填，`secretKey（密钥）` 可选 |
 | 写入能力 | 不提供自定义权限节点 | 暂不创建 | 当前阶段禁止自定义写入接口 |
@@ -308,16 +317,24 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 3. 短码只映射 `embed（嵌入模式）` 与 `eid（嵌入实例标识）` 查询参数。
 4. 短码不复制地图业务逻辑。
 
-### 12.5 文案与界面
+### 12.5 编辑器小组件
+
+1. 新增 `ui` 子项目，使用 Halo 官方 `@halo-dev/ui-plugin-bundler-kit` 构建 UI 扩展。
+2. UI 入口注册 `default:editor:extension:create`，返回用于 Slash Command 的 Tiptap 扩展。
+3. `getCommandMenuItems（获取命令菜单项）` 返回 `QSL 通联网格地图` 菜单项。
+4. 菜单命令删除 `/` 输入范围并插入 `[qsl-grid-map]`。
+5. 构建产物输出到 `src/main/resources/ui/main.js`，随插件 JAR 打包。
+
+### 12.6 文案与界面
 
 1. 注释、页面标题、按钮、提示信息使用中文。
 2. 字段展示使用 `字段（字段释义）` 形式。
 3. 第三方协议字段保留英文原文，并在附近提供中文说明。
 
-### 12.6 构建与校验
+### 12.7 构建与校验
 
 1. 执行后端构建。
-2. 执行前端构建。
+2. 执行前端 UI 构建，生成 `src/main/resources/ui/main.js`。
 3. 核对插件依赖声明。
 4. 核对 API 路径只包含 `map/page`。
 5. 核对没有自定义写入接口和角色模板。
@@ -328,15 +345,16 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 1. 访问 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page` 可打开公开地图页面。
 2. 页面能读取 `qsl-management` 的 `/qso-public/grids` 数据并完成地图展示。
 3. `[qsl-grid-map]` 短码能在 Halo 内容中嵌入同一地图页面。
-4. 插件未创建角色模板。
-5. 插件未创建任何自定义写入接口。
-6. 插件未创建 `/grids`、`/settings`、`/cache/refresh` 等额外接口。
-7. 插件声明 `qsl-management` 强依赖。
-8. 页面不展示敏感字段。
-9. 空数据、接口失败、限流失败、天地图未配置或瓦片失败均有中文提示。
-10. 构建和热重载完成后再次核对与 Halo 官方文档一致。
-11. 匿名访问 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page?embed=1` 返回地图页面，而不是登录页。
-12. 带认证访问成功不能替代匿名公开访问验收。
+4. 文章和页面编辑器输入 `/` 后能看到 `QSL 通联网格地图` 小组件，点击后插入 `[qsl-grid-map]`。
+5. 插件未创建角色模板。
+6. 插件未创建任何自定义写入接口。
+7. 插件未创建 `/grids`、`/settings`、`/cache/refresh` 等额外接口。
+8. 插件声明 `qsl-management` 强依赖。
+9. 页面不展示敏感字段。
+10. 空数据、接口失败、限流失败、天地图未配置或瓦片失败均有中文提示。
+11. 构建和热重载完成后再次核对与 Halo 官方文档一致。
+12. 匿名访问 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page?embed=1` 返回地图页面，而不是登录页。
+13. 带认证访问成功不能替代匿名公开访问验收。
 
 ## 14. 暂不实现内容
 
@@ -362,6 +380,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 | `.\gradlew.bat test` | 通过 |
 | `.\gradlew.bat build` | 通过 |
 | `.\gradlew.bat reloadPlugin` | 通过，插件已就绪 |
+| `pnpm build`（`ui` 子项目） | 通过，生成 `src/main/resources/ui/main.js` |
 
 联动验证：
 
@@ -383,6 +402,9 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 | 纯地图截图 | 通过，`tmp/qsl-grid-map-pure-full-window.png` 确认天地图底图、中文注记与网格覆盖层正常显示 |
 | 后台缩放范围默认值 | 通过，页面从后台配置输出 `minZoom（最小缩放）= 3` 与 `maxZoom（最大缩放）= 8` |
 | 插件设置元数据 | 通过，已注册 `settingName（设置名称）` 与 `configMapName（配置名称）` |
+| 编辑器小组件资源 | 通过，已生成 `src/main/resources/ui/main.js` 并接入 Gradle `processResources` |
+| 编辑器 `/` 菜单 | 通过，文章编辑器输入 `/` 后出现 `QSL 通联网格地图`，点击后插入 `[qsl-grid-map]` |
+| 编辑器小组件截图 | 通过，`tmp/qsl-grid-map-editor-slash-widget.png` 确认菜单项显示 |
 
 已验证的 `qsl-management` 数据接口：
 

@@ -1,0 +1,20 @@
+{
+  "name": "qsl-grid-map-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@halo-dev/richtext-editor": "2.25.2",
+    "@halo-dev/ui-shared": "2.25.2",
+    "@tiptap/core": "^3.22.2"
+  },
+  "devDependencies": {
+    "@halo-dev/ui-plugin-bundler-kit": "2.25.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7",
+    "vue": "^3.5.22",
+    "vue-router": "^5.1.0"
+  }
+}

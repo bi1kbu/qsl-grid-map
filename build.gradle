@@ -34,6 +34,31 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
+def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
+
+tasks.register('installUiDependencies', Exec) {
+    workingDir = file('ui')
+    inputs.file('ui/package.json')
+    inputs.file('ui/pnpm-lock.yaml')
+    outputs.file('ui/node_modules/.modules.yaml')
+    commandLine(isWindows ? ['cmd', '/c', 'pnpm', 'install', '--frozen-lockfile'] : ['pnpm', 'install', '--frozen-lockfile'])
+}
+
+tasks.register('buildUi', Exec) {
+    dependsOn('installUiDependencies')
+    workingDir = file('ui')
+    inputs.file('ui/package.json')
+    inputs.file('ui/pnpm-lock.yaml')
+    inputs.file('ui/vite.config.ts')
+    inputs.dir('ui/src')
+    outputs.file('src/main/resources/ui/main.js')
+    commandLine(isWindows ? ['cmd', '/c', 'pnpm', 'build'] : ['pnpm', 'build'])
+}
+
+tasks.named('processResources') {
+    dependsOn('buildUi')
+}
+
 
 tasks.named('generatePluginComponentsIdx') {
     notCompatibleWithConfigurationCache('This task invokes "Task.project" at execution time, which is not supported with configuration cache.')

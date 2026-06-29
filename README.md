@@ -1,6 +1,5 @@
-# qsl-grid-map
-
 QSL 通联网格地图是一个 Halo 2 前台展示插件，用于把 `qsl-management` 已公开的通联网格数据展示为交互地图。
+<img width="1392" height="787" alt="map" src="https://github.com/user-attachments/assets/12ba8687-8f03-433d-9484-00df03a61299" />
 
 ## 简介
 

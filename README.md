@@ -1,6 +1,6 @@
-QSL 通联网格地图是一个 Halo 2 前台展示插件，用于把 `qsl-management` 已公开的通联网格数据展示为交互地图。
+# 业余无线电 GardMap 通联网格地图
 
-<img width="1392" height="787" alt="map" src="https://github.com/user-attachments/assets/12ba8687-8f03-433d-9484-00df03a61299" />
+业余无线电 GardMap 通联网格地图是一个 Halo 2 前台展示插件，用于把 `qsl-management` 已公开的通联网格数据展示为交互地图。
 
 ## 简介
 
@@ -12,17 +12,11 @@ QSL 通联网格地图是一个 Halo 2 前台展示插件，用于把 `qsl-manag
 /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page
 ```
 
-> 演示页面：
-> https://bi1kbu.com/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page
-> 
 短码：
 
 ```text
 [qsl-grid-map]
 ```
-
-> 演示页面：
-> https://bi1kbu.com/qsl
 
 数据来源：
 
@@ -41,7 +35,6 @@ qsl-management >=2.3.21
 安装并启用插件后，在 Halo 后台进入插件设置，填写天地图服务配置：
 
 <img width="3828" height="1923" alt="image" src="https://github.com/user-attachments/assets/29dfa7e8-2fcc-4180-bb8e-28b95630d42f" />
-
 
 <img width="3828" height="1923" alt="image" src="https://github.com/user-attachments/assets/09f1fb0e-e6ba-4c6f-be22-df7e4f4aeee7" />
 
@@ -80,7 +73,7 @@ http://localhost:8091
 当前产物示例：
 
 ```text
-build/libs/plugin-qsl-grid-map-0.0.4.jar
+build/libs/plugin-qsl-grid-map-0.0.17.jar
 ```
 
 ## 许可证

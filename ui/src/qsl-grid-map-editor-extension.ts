@@ -7,10 +7,35 @@ import {
   type Editor,
   type PMNode
 } from "@halo-dev/richtext-editor";
+import { defineComponent, h, markRaw } from "vue";
 
 const QSL_GRID_MAP_SHORTCODE = "[qsl-grid-map]";
 const SHORTCODE_PATTERN = /^\s*\[qsl-grid-map\]\s*$/i;
 const shortcodePreviewPluginKey = new PluginKey("qsl-grid-map-shortcode-preview-plugin");
+
+const RoadMapLineIcon = defineComponent({
+  name: "RoadMapLineIcon",
+  setup() {
+    return () =>
+      h(
+        "svg",
+        {
+          xmlns: "http://www.w3.org/2000/svg",
+          viewBox: "0 0 24 24",
+          fill: "currentColor"
+        },
+        [
+          h("path", {
+            d: "M0 0h24v24H0z",
+            fill: "none"
+          }),
+          h("path", {
+            d: "M4 6.143v12.824l5.065-2.17l6 3L20 17.68V4.857l1.303-.558a.5.5 0 0 1 .697.46V19l-7 3l-6-3l-6.303 2.701a.5.5 0 0 1-.697-.46V7zm12.243 5.1L12 15.485l-4.243-4.242a6 6 0 1 1 8.486 0M12 12.657l2.828-2.829a4 4 0 1 0-5.656 0z"
+          })
+        ]
+      );
+  }
+});
 
 function insertShortcodeParagraph(editor: Editor) {
   editor
@@ -124,7 +149,7 @@ export const QslGridMapEditorExtension = Extension.create({
       getCommandMenuItems() {
         return {
           priority: 80,
-          icon: "ri-map-pin-line",
+          icon: markRaw(RoadMapLineIcon),
           title: "QSL 通联网格地图",
           keywords: ["qsl", "grid", "map", "qso", "通联", "网格", "地图"],
           command: ({ editor, range }: { editor: Editor; range: { from: number; to: number } }) => {

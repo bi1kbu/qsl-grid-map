@@ -48,7 +48,7 @@
 
 插件显示名称：`QSL 通联网格地图`
 
-当前版本：`0.0.7`
+当前版本：`0.0.13`
 
 插件类型：Halo 2 前台展示插件。
 
@@ -90,16 +90,14 @@
 3. 不新增 `/cache/refresh` 缓存接口。
 4. 不新增任何 `POST`、`PUT`、`PATCH`、`DELETE` 写入接口。
 
-页面参数建议：
+页面参数约束：
 
 | 参数 | 含义 | 说明 |
 | --- | --- | --- |
-| `sceneType` | 场景类型 | 可选，传递给 `qsl-management`，仅允许 `QSO`、`SWL` |
-| `dateFrom` | 开始日期 | 可选，格式为 `yyyy-MM-dd` |
-| `dateTo` | 结束日期 | 可选，格式为 `yyyy-MM-dd` |
-| `grid` | 网格筛选 | 可选，四位 Maidenhead 网格 |
-| `limit` | 明细数量上限 | 可选，默认 `500`，最大 `2000` |
 | `embed` | 嵌入模式 | 可选，短码嵌入时使用 |
+| `eid` | 嵌入实例标识 | 可选，短码 iframe 高度回传时使用 |
+
+页面不再接收或透传 `sceneType（场景类型）`、`dateFrom（开始日期）`、`dateTo（结束日期）`、`grid（网格）`、`limit（明细数量上限）` 等筛选参数。前台固定请求 QSO 网格数据，不限制时间、数量或网格。
 
 页面内数据读取地址：
 
@@ -130,13 +128,15 @@
 1. 短码输出一个嵌入页面容器，建议使用 `iframe` 或等价嵌入方式。
 2. 嵌入目标复用 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page?embed=true`。
 3. 短码不单独实现地图渲染逻辑。
-4. 短码参数只拼接为页面查询参数，不直接访问业务数据。
+4. 短码仅拼接 `embed（嵌入模式）` 与 `eid（嵌入实例标识）`，不接收筛选参数，不直接访问业务数据。
 
-短码参数建议：
+短码参数约束：
 
 ```text
-[qsl-grid-map sceneType="QSO" dateFrom="2026-01-01" dateTo="2026-12-31" limit="500"]
+[qsl-grid-map]
 ```
+
+短码不再解析筛选属性；即使内容中保留旧属性，也不会拼接到 iframe 地址或影响地图数据请求。
 
 ## 7. 页面功能
 
@@ -147,11 +147,13 @@
 1. 显示四位 Maidenhead 网格。
 2. 在地图上绘制网格范围或网格中心标记。
 3. 点击网格后显示呼号集合、通联数量、模式、频率、频段、日期等公开字段。
-4. 提供通联明细列表。
-5. 支持 URL 查询参数筛选。
+4. 点击网格弹窗展示公开明细摘要。
+5. 不提供右侧清单、筛选面板、时间过滤、数量限制或网格过滤。
 6. 支持嵌入模式，适配 Halo 内容页宽度。
 7. 空数据、接口错误、限流错误需要有中文提示。
 8. 初始中心点和空数据回退中心点默认为 `OM89（中国北京）`，默认缩放级别为 `3`，并支持后台配置。
+9. 后台可配置 `minZoom（最小缩放）` 与 `maxZoom（最大缩放）`，默认 `3~8`；前台不再提供缩放范围测试控件。
+10. 页面主体仅保留 `qsl-map-panel（地图面板）` 与地图相关 JavaScript/CSS，地图填满浏览器窗口。
 
 第一版默认地图瓦片：
 
@@ -173,8 +175,10 @@
 
 1. `defaultCenterGrid（默认中心网格）`：必填，四位 Maidenhead 网格，默认 `OM89（中国北京）`。
 2. `defaultZoom（默认缩放级别）`：必填，范围 `1` 到 `18`，默认 `3`。
-3. 配置值由 Halo 插件设置表单保存，服务端通过官方 `ReactiveSettingFetcher.fetch("map", MapViewSettings.class)` 读取。
-4. 服务端对中心网格和缩放级别做兜底规范化，非法中心网格回退到 `OM89`，非法缩放限制在 `1` 到 `18`。
+3. `minZoom（最小缩放级别）`：必填，范围 `1` 到 `18`，默认 `3`。
+4. `maxZoom（最大缩放级别）`：必填，范围 `1` 到 `18`，默认 `8`。
+5. 配置值由 Halo 插件设置表单保存，服务端通过官方 `ReactiveSettingFetcher.fetch("map", MapViewSettings.class)` 读取。
+6. 服务端对中心网格和缩放级别做兜底规范化，非法中心网格回退到 `OM89`，非法缩放限制在 `1` 到 `18`；若最小缩放大于最大缩放，则回退默认 `3~8`。
 
 ## 8. 数据来源
 
@@ -187,7 +191,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 已确认的接口约束：
 
 1. 匿名可访问。
-2. 支持 `sceneType/dateFrom/dateTo/grid/limit` 查询参数。
+2. 支持 `sceneType/dateFrom/dateTo/grid/limit` 查询参数，但本插件当前固定只使用 `sceneType=QSO`。
 3. 按对方四位 Maidenhead 网格聚合。
 4. 从 `QsoRecord.spec.qth` 读取对方 QTH。
 5. 仅当 QTH 整体为 4、6、8 位 Maidenhead 网格时纳入清单。
@@ -195,7 +199,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 7. 返回去重呼号集合与通联明细。
 8. 明细字段仅包含呼号、日期、时间、时区、模式、频率、频段等公开字段。
 9. 不返回地址、备注、本台信息等敏感字段。
-10. `limit` 默认 `500`，最大 `2000`。
+10. `limit` 默认 `500`，最大 `2000`，但本插件当前不传入 `limit（明细数量上限）`。
 
 本插件不得绕过该公开接口直接读取 `qsl-management` 的 Extension 数据，除非后续重新评审并更新本文档。
 
@@ -208,7 +212,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 3. 本插件不创建自定义后台管理接口。
 4. 本插件只提供公开只读页面和 Halo 插件设置表单。
 5. 页面只读取 `qsl-management` 已公开的网格数据。
-6. 页面参数必须做前端白名单处理，避免把无关参数透传给数据接口。
+6. 页面不得把 URL 或短码筛选参数透传给数据接口。
 7. 页面展示字段必须限制在 `qsl-management` 公开接口返回字段内。
 8. 不展示地址、电话、邮箱、通信备注、本台配置、卡片局地址、系统参数等敏感信息。
 
@@ -259,7 +263,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 原因：
 
 1. 天地图服务配置由 Halo 插件 `Setting + ConfigMap` 机制持久化。
-2. 展示筛选参数通过 URL 或短码参数传入。
+2. 通联网格数据由 `qsl-management` 持久化和聚合；本插件当前不持久化、传入或保存展示筛选参数。
 3. 通联网格数据由 `qsl-management` 持久化和聚合。
 
 若后续需要站点级默认中心点、默认缩放、默认场景或嵌入高度，必须新增配置字段并同步更新本文档。
@@ -291,15 +295,17 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 5. 绘制网格多边形或中心标记。
 6. 根据通联数量设置视觉强度。
 7. 点击网格展示明细。
-8. 提供列表与地图联动。
+8. 不提供右侧清单与列表联动。
 9. 未配置 `appKey（应用 key）` 或瓦片加载失败时显示中文提示。
 10. 后台可配置 `defaultCenterGrid（默认中心网格）` 与 `defaultZoom（默认缩放级别）`，默认分别为 `OM89` 与 `3`。
+11. 后台可配置 `minZoom（最小缩放）` 与 `maxZoom（最大缩放）`，默认 `3~8`；前台不提供临时测试控件。
+12. 前台不显示当前缩放字段，缩放行为由 Leaflet 控件与后台缩放范围配置共同决定。
 
 ### 12.4 短码
 
 1. 注册 `[qsl-grid-map]` 短码。
 2. 短码输出嵌入页面。
-3. 短码参数映射为 `map/page` 查询参数。
+3. 短码只映射 `embed（嵌入模式）` 与 `eid（嵌入实例标识）` 查询参数。
 4. 短码不复制地图业务逻辑。
 
 ### 12.5 文案与界面
@@ -329,7 +335,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 8. 页面不展示敏感字段。
 9. 空数据、接口失败、限流失败、天地图未配置或瓦片失败均有中文提示。
 10. 构建和热重载完成后再次核对与 Halo 官方文档一致。
-11. 匿名访问 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page?embed=1&sceneType=QSO` 返回地图页面，而不是登录页。
+11. 匿名访问 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page?embed=1` 返回地图页面，而不是登录页。
 12. 带认证访问成功不能替代匿名公开访问验收。
 
 ## 14. 暂不实现内容
@@ -372,12 +378,16 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 | 浏览器截图 | 通过，`tmp/qsl-grid-map-tianditu-key-configured.png` 确认地图底图与中文注记正常显示 |
 | 默认地图视图 | 通过，页面输出 `defaultCenterGrid（默认中心网格）= OM89` 与 `defaultZoom（默认缩放级别）= 3`，旧硬编码坐标已移除 |
 | 默认视图截图 | 通过，`tmp/qsl-grid-map-default-view-om89.png` 确认页面加载完成 |
+| 纯地图窗口 | 通过，仅保留 `qsl-map-panel（地图面板）` 与 `#qsl-map（地图容器）`，面板 `position=fixed` 且 `inset=0`，填满浏览器窗口 |
+| 旧面板移除 | 通过，未发现筛选表单、右侧清单、数量限制、当前缩放显示或前台缩放范围测试控件 |
+| 纯地图截图 | 通过，`tmp/qsl-grid-map-pure-full-window.png` 确认天地图底图、中文注记与网格覆盖层正常显示 |
+| 后台缩放范围默认值 | 通过，页面从后台配置输出 `minZoom（最小缩放）= 3` 与 `maxZoom（最大缩放）= 8` |
 | 插件设置元数据 | 通过，已注册 `settingName（设置名称）` 与 `configMapName（配置名称）` |
 
 已验证的 `qsl-management` 数据接口：
 
 ```text
-GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids?sceneType=QSO&limit=20
+GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids?sceneType=QSO
 ```
 
 ## 16. 偏差表

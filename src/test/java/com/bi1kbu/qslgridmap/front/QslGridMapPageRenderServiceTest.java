@@ -9,9 +9,9 @@ class QslGridMapPageRenderServiceTest {
     private final QslGridMapPageRenderService service = new QslGridMapPageRenderService();
 
     @Test
-    void renderOnlyReadsQslManagementPublicGridApi() {
+    void renderOnlyReadsQslManagementPublicQsoGridApi() {
         var html = service.render(new QslGridMapPageRenderService.RenderOptions(
-            "QSO",
+            "SWL",
             "2026-01-01",
             "2026-12-31",
             "OM89",
@@ -21,18 +21,24 @@ class QslGridMapPageRenderServiceTest {
         ));
 
         assertThat(html).contains("/apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids");
+        assertThat(html).contains("`${API_URL}?sceneType=QSO`");
         assertThat(html).doesNotContain("/apis/qsl-grid-map.bi1kbu.com/v1alpha1/grids");
         assertThat(html).doesNotContain("tile.openstreetmap.org");
-        assertThat(html).contains("QSL 通联网格地图");
-        assertThat(html).contains("const EMBED_MODE = true;");
-        assertThat(html).contains("请先在 Halo 后台的 QSL 通联网格地图插件设置中填写天地图应用 key");
+        assertThat(html).doesNotContain("dateFrom");
+        assertThat(html).doesNotContain("dateTo");
+        assertThat(html).doesNotContain("limit（上限）");
+        assertThat(html).doesNotContain("qsl-list-panel");
+        assertThat(html).doesNotContain("qsl-grid-filter");
+        assertThat(html).contains("qsl-map-panel");
+        assertThat(html).contains("position: fixed;");
+        assertThat(html).contains("inset: 0;");
     }
 
     @Test
-    void renderUsesTiandituTileServiceWhenAppKeyConfigured() {
+    void renderUsesTiandituTileServiceAndBackendZoomSettings() {
         var html = service.render(
             QslGridMapPageRenderService.RenderOptions.empty(),
-            new QslGridMapPageRenderService.MapSettings("test-key-123", "secret-value", "OM89", 3)
+            new QslGridMapPageRenderService.MapSettings("test-key-123", "secret-value", "OM89", 3, 3, 8)
         );
 
         assertThat(html).contains("https://t{s}.tianditu.gov.cn/DataServer?T=vec_w");
@@ -41,42 +47,45 @@ class QslGridMapPageRenderServiceTest {
         assertThat(html).contains("appKey: \"test-key-123\"");
         assertThat(html).contains("centerGrid: \"OM89\"");
         assertThat(html).contains("zoom: Number(\"3\") || 3");
+        assertThat(html).contains("minZoom: Number(\"3\") || 3");
+        assertThat(html).contains("maxZoom: Number(\"8\") || 8");
         assertThat(html).contains("setView(defaultMapCenter(), DEFAULT_MAP_VIEW.zoom)");
+        assertThat(html).contains("minZoom: DEFAULT_MAP_VIEW.minZoom");
+        assertThat(html).contains("maxZoom: DEFAULT_MAP_VIEW.maxZoom");
         assertThat(html).contains("state.map.attributionControl.setPrefix(false);");
         assertThat(html).doesNotContain("secret-value");
-        assertThat(html).doesNotContain("tile.openstreetmap.org");
     }
 
     @Test
-    void renderFiltersInvalidOptions() {
-        var html = service.render(new QslGridMapPageRenderService.RenderOptions(
-            "EYEBALL",
-            "bad-date",
-            "2026-12-31",
-            "invalid",
-            "99999",
-            "true",
-            "<bad>"
-        ));
-
-        assertThat(html).doesNotContain("sceneType: \"EYEBALL\"");
-        assertThat(html).doesNotContain("dateFrom: \"bad-date\"");
-        assertThat(html).doesNotContain("grid: \"invalid\"");
-        assertThat(html).contains("value=\"2000\"");
-        assertThat(html).contains("qsl-grid-map-default");
-    }
-
-    @Test
-    void renderFiltersInvalidMapViewSettings() {
+    void renderFallsBackInvalidMapViewSettings() {
         var tiandituSettings = new QslGridMapPageRenderService.TiandituSettings();
         var mapViewSettings = new QslGridMapPageRenderService.MapViewSettings();
         mapViewSettings.setDefaultCenterGrid("bad");
         mapViewSettings.setDefaultZoom(99);
+        mapViewSettings.setMinZoom(9);
+        mapViewSettings.setMaxZoom(2);
 
         var settings = QslGridMapPageRenderService.normalizeSettings(tiandituSettings, mapViewSettings);
         var html = service.render(QslGridMapPageRenderService.RenderOptions.empty(), settings);
 
         assertThat(html).contains("centerGrid: \"OM89\"");
-        assertThat(html).contains("zoom: Number(\"18\") || 3");
+        assertThat(html).contains("zoom: Number(\"8\") || 3");
+        assertThat(html).contains("minZoom: Number(\"3\") || 3");
+        assertThat(html).contains("maxZoom: Number(\"8\") || 8");
+    }
+
+    @Test
+    void normalizeDefaultZoomWithinBackendZoomRange() {
+        var tiandituSettings = new QslGridMapPageRenderService.TiandituSettings();
+        var mapViewSettings = new QslGridMapPageRenderService.MapViewSettings();
+        mapViewSettings.setMinZoom(5);
+        mapViewSettings.setMaxZoom(8);
+
+        var settings = QslGridMapPageRenderService.normalizeSettings(tiandituSettings, mapViewSettings);
+        var html = service.render(QslGridMapPageRenderService.RenderOptions.empty(), settings);
+
+        assertThat(html).contains("zoom: Number(\"5\") || 3");
+        assertThat(html).contains("minZoom: Number(\"5\") || 3");
+        assertThat(html).contains("maxZoom: Number(\"8\") || 8");
     }
 }

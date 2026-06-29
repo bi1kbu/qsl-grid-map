@@ -30,6 +30,8 @@ class QslGridMapPublicPageFilterTest {
         var mapViewSettings = new QslGridMapPageRenderService.MapViewSettings();
         mapViewSettings.setDefaultCenterGrid("OM89");
         mapViewSettings.setDefaultZoom(3);
+        mapViewSettings.setMinZoom(3);
+        mapViewSettings.setMaxZoom(8);
         when(settingFetcher.fetch("map", QslGridMapPageRenderService.MapViewSettings.class))
             .thenReturn(Mono.just(mapViewSettings));
         var request = MockServerHttpRequest.get(
@@ -50,12 +52,17 @@ class QslGridMapPublicPageFilterTest {
             .isEqualTo("text/html;charset=UTF-8");
         assertThat(exchange.getResponse().getBodyAsString().block())
             .contains("QSL 通联网格地图")
-            .contains("const EMBED_MODE = true;")
-            .contains("sceneType: \"QSO\"")
-            .contains("grid: \"OM89\"")
+            .contains("qsl-map-panel")
+            .contains("`${API_URL}?sceneType=QSO`")
             .contains("configured: true")
             .contains("appKey: \"official-key-123\"")
-            .contains("centerGrid: \"OM89\"");
+            .contains("centerGrid: \"OM89\"")
+            .contains("minZoom: Number(\"3\") || 3")
+            .contains("maxZoom: Number(\"8\") || 8")
+            .doesNotContain("qsl-grid-filter")
+            .doesNotContain("qsl-list-panel")
+            .doesNotContain("dateFrom")
+            .doesNotContain("limit（上限）");
     }
 
     @Test

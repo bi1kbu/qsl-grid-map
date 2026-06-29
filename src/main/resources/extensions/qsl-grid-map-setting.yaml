@@ -31,3 +31,15 @@ spec:
           value: 3
           validation: required|min:1|max:18
           help: 页面初始加载和无数据时使用的地图缩放级别，默认 3。
+        - $formkit: number
+          name: minZoom
+          label: 最小缩放级别
+          value: 3
+          validation: required|min:1|max:18
+          help: 页面允许用户缩小到的最小缩放级别，默认 3。
+        - $formkit: number
+          name: maxZoom
+          label: 最大缩放级别
+          value: 8
+          validation: required|min:1|max:18
+          help: 页面允许用户放大到的最大缩放级别，默认 8。

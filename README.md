@@ -34,8 +34,13 @@ qsl-management >=2.3.21
 
 安装并启用插件后，在 Halo 后台进入插件设置，填写天地图服务配置：
 
+<img width="3828" height="1923" alt="image" src="https://github.com/user-attachments/assets/29dfa7e8-2fcc-4180-bb8e-28b95630d42f" />
+
+<img width="3828" height="1923" alt="image" src="https://github.com/user-attachments/assets/09f1fb0e-e6ba-4c6f-be22-df7e4f4aeee7" />
+
 1. `appKey（应用 key）`：必填，用作天地图瓦片服务的 `tk` 参数。
 2. `secretKey（密钥）`：可选，当前不会输出到前台页面。
+3. 天地图令牌获取方式参考（免费）：http://lbs.tianditu.gov.cn/
 
 ## 开发环境
 

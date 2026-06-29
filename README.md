@@ -73,7 +73,7 @@ http://localhost:8091
 当前产物示例：
 
 ```text
-build/libs/plugin-qsl-grid-map-0.0.17.jar
+build/libs/plugin-qsl-grid-map-0.0.18.jar
 ```
 
 ## 许可证

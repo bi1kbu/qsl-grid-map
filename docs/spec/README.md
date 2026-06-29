@@ -15,7 +15,7 @@
 
 1. 插件标识：`qsl-grid-map`
 2. 插件显示名称：`业余无线电 GardMap 通联网格地图`
-3. 当前版本：`0.0.17`
+3. 当前版本：`0.0.18`
 4. Halo 目标版本：`>=2.25.0`
 5. 强依赖插件：`qsl-management >=2.3.21`
 6. 唯一插件 API：`GET /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page`

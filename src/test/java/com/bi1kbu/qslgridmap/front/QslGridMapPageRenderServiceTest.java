@@ -50,6 +50,7 @@ class QslGridMapPageRenderServiceTest {
         assertThat(html).contains("minZoom: Number(\"3\") || 3");
         assertThat(html).contains("maxZoom: Number(\"8\") || 8");
         assertThat(html).contains("setView(defaultMapCenter(), DEFAULT_MAP_VIEW.zoom)");
+        assertThat(html).doesNotContain("fitBounds");
         assertThat(html).contains("minZoom: DEFAULT_MAP_VIEW.minZoom");
         assertThat(html).contains("maxZoom: DEFAULT_MAP_VIEW.maxZoom");
         assertThat(html).contains("state.map.attributionControl.setPrefix(false);");

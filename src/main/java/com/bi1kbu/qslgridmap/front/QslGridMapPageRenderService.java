@@ -433,10 +433,6 @@ public class QslGridMapPageRenderService {
 
                   if (validItems.length) {
                     hideNotice();
-                    state.map.fitBounds(state.layerGroup.getBounds(), {
-                      padding: [26, 26],
-                      maxZoom: Math.min(6, DEFAULT_MAP_VIEW.maxZoom)
-                    });
                   } else {
                     state.map.setView(defaultMapCenter(), DEFAULT_MAP_VIEW.zoom);
                     showNotice("没有符合条件的 QSO 通联网格数据。");

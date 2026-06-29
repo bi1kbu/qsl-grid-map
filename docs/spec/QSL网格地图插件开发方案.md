@@ -39,7 +39,7 @@
 3. Halo 自定义 Controller API 默认只允许超级管理员访问；若使用 Controller 承载公开页面，需要额外处理匿名访问策略。
 4. 当前需求明确“不创建角色模板”，因此公开页面接口不应依赖匿名聚合 Role 模板作为常规方案。
 5. 短码替换应基于 Halo 主题端文章内容处理与主题端自定义页面内容处理扩展点完成。
-6. 文章和页面编辑器 `/` 菜单入口应基于 Halo 默认编辑器 UI 扩展点 `default:editor:extension:create` 注册，菜单动作只插入 `[qsl-grid-map]` 短码文本。
+6. 文章和页面编辑器 `/` 菜单入口应基于 Halo 默认编辑器 UI 扩展点 `default:editor:extension:create` 注册，菜单动作插入 `[qsl-grid-map]` 短码，并在编辑器内渲染为预览卡片。
 6. Halo 2.25 插件上下文会注册 `reactiveSettingFetcher（响应式设置读取器）` 与 `settingFetcher（同步设置读取器）`；请求处理链路使用 `ReactiveSettingFetcher（响应式设置读取器）`，避免在 Reactor HTTP 线程中阻塞。
 7. `DefaultReactiveSettingFetcher（默认响应式设置读取实现）` 通过插件 `configMapName（配置名称）` 对应的 ConfigMap 读取设置数据，因此本插件不直接读取 ConfigMap，也不维护额外配置接口。
 
@@ -143,8 +143,9 @@
 
 1. 在 Halo 默认编辑器中输入 `/` 后，提供 `QSL 通联网格地图` 菜单项。
 2. 菜单项通过 UI 扩展点 `default:editor:extension:create` 注册 Tiptap 扩展。
-3. 点击菜单项只向编辑器当前位置插入 `[qsl-grid-map]`。
-4. 小组件不新增服务端接口，不读取业务数据，不绕过短码渲染逻辑。
+3. 点击菜单项向编辑器当前位置插入 `[qsl-grid-map]`，编辑器界面通过 ProseMirror Decoration 隐藏原始短码并显示预览卡片。
+4. 预览卡片只用于编辑体验，保存内容仍为 `[qsl-grid-map]`，前台渲染继续走短码替换和 iframe 嵌入逻辑。
+5. 小组件不新增服务端接口，不读取业务数据，不绕过短码渲染逻辑。
 
 ## 7. 页面功能
 
@@ -159,7 +160,7 @@
 5. 不提供右侧清单、筛选面板、时间过滤、数量限制或网格过滤。
 6. 支持嵌入模式，适配 Halo 内容页宽度。
 7. 空数据、接口错误、限流错误需要有中文提示。
-8. 初始中心点和空数据回退中心点默认为 `OM89（中国北京）`，默认缩放级别为 `3`，并支持后台配置。
+8. 初始中心点、数据加载完成后的保留中心点和空数据回退中心点默认为 `OM89（中国北京）`，默认缩放级别为 `3`，并支持后台配置。
 9. 后台可配置 `minZoom（最小缩放）` 与 `maxZoom（最大缩放）`，默认 `3~8`；前台不再提供缩放范围测试控件。
 10. 页面主体仅保留 `qsl-map-panel（地图面板）` 与地图相关 JavaScript/CSS，地图填满浏览器窗口。
 
@@ -260,7 +261,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 | --- | --- | --- | --- |
 | 公开地图页面 | 无 | 无 | 匿名只读页面，不进入后台权限分配 |
 | 短码嵌入 | 无 | 无 | 通过主题端内容处理替换为 iframe |
-| 编辑器小组件 | 无 | 无 | 通过 Halo 默认编辑器 UI 扩展插入 `[qsl-grid-map]` 文本 |
+| 编辑器小组件 | 无 | 无 | 通过 Halo 默认编辑器 UI 扩展插入 `[qsl-grid-map]`，编辑态显示预览卡片 |
 | 数据读取 | 复用 `qsl-management` 公开接口权限 | 不由本插件维护 | 本插件不自行维护数据接口 |
 | 天地图配置 | 复用 Halo Console 插件设置权限 | 本插件不创建 | `appKey（应用 key）` 必填，`secretKey（密钥）` 可选 |
 | 写入能力 | 不提供自定义权限节点 | 暂不创建 | 当前阶段禁止自定义写入接口 |
@@ -306,7 +307,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 7. 点击网格展示明细。
 8. 不提供右侧清单与列表联动。
 9. 未配置 `appKey（应用 key）` 或瓦片加载失败时显示中文提示。
-10. 后台可配置 `defaultCenterGrid（默认中心网格）` 与 `defaultZoom（默认缩放级别）`，默认分别为 `OM89` 与 `3`。
+10. 后台可配置 `defaultCenterGrid（默认中心网格）` 与 `defaultZoom（默认缩放级别）`，默认分别为 `OM89` 与 `3`；页面加载通联网格数据后不得自动 `fitBounds（适配范围）` 覆盖后台默认视图。
 11. 后台可配置 `minZoom（最小缩放）` 与 `maxZoom（最大缩放）`，默认 `3~8`；前台不提供临时测试控件。
 12. 前台不显示当前缩放字段，缩放行为由 Leaflet 控件与后台缩放范围配置共同决定。
 
@@ -323,6 +324,8 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 2. UI 入口注册 `default:editor:extension:create`，返回用于 Slash Command 的 Tiptap 扩展。
 3. `getCommandMenuItems（获取命令菜单项）` 返回 `QSL 通联网格地图` 菜单项。
 4. 菜单命令删除 `/` 输入范围并插入 `[qsl-grid-map]`。
+5. 预览插件匹配独立段落中的 `[qsl-grid-map]`，隐藏原始短码文本并显示 `QSL 通联网格地图` 卡片。
+6. 编辑器扩展必须从 `@halo-dev/richtext-editor` 导入 `Extension（扩展）`、`Plugin（插件）`、`Decoration（装饰）` 等对象，不得直接打包独立 `@tiptap/*` 或 ProseMirror 运行时。
 5. 构建产物输出到 `src/main/resources/ui/main.js`，随插件 JAR 打包。
 
 ### 12.6 文案与界面
@@ -345,7 +348,7 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 1. 访问 `/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page` 可打开公开地图页面。
 2. 页面能读取 `qsl-management` 的 `/qso-public/grids` 数据并完成地图展示。
 3. `[qsl-grid-map]` 短码能在 Halo 内容中嵌入同一地图页面。
-4. 文章和页面编辑器输入 `/` 后能看到 `QSL 通联网格地图` 小组件，点击后插入 `[qsl-grid-map]`。
+4. 文章和页面编辑器输入 `/` 后能看到 `QSL 通联网格地图` 小组件，点击后显示预览卡片，保存层仍保留 `[qsl-grid-map]`。
 5. 插件未创建角色模板。
 6. 插件未创建任何自定义写入接口。
 7. 插件未创建 `/grids`、`/settings`、`/cache/refresh` 等额外接口。
@@ -395,16 +398,17 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
 | 天地图未配置状态 | 通过，显示后台配置提示，不请求天地图瓦片 |
 | 天地图已配置状态 | 通过，`vec_w（矢量底图）` 与 `cva_w（矢量注记）` 瓦片请求返回 200 |
 | 浏览器截图 | 通过，`tmp/qsl-grid-map-tianditu-key-configured.png` 确认地图底图与中文注记正常显示 |
-| 默认地图视图 | 通过，页面输出 `defaultCenterGrid（默认中心网格）= OM89` 与 `defaultZoom（默认缩放级别）= 3`，旧硬编码坐标已移除 |
-| 默认视图截图 | 通过，`tmp/qsl-grid-map-default-view-om89.png` 确认页面加载完成 |
+| 默认地图视图 | 通过，页面输出 `defaultCenterGrid（默认中心网格）= OM89` 与 `defaultZoom（默认缩放级别）= 3`，旧硬编码坐标已移除，数据加载后不再自动 `fitBounds（适配范围）` 覆盖后台默认视图 |
+| 默认视图截图 | 通过，`tmp/qsl-grid-map-default-view-om89-no-fitbounds.png` 确认数据加载后仍保留 OM89 默认视图 |
 | 纯地图窗口 | 通过，仅保留 `qsl-map-panel（地图面板）` 与 `#qsl-map（地图容器）`，面板 `position=fixed` 且 `inset=0`，填满浏览器窗口 |
 | 旧面板移除 | 通过，未发现筛选表单、右侧清单、数量限制、当前缩放显示或前台缩放范围测试控件 |
 | 纯地图截图 | 通过，`tmp/qsl-grid-map-pure-full-window.png` 确认天地图底图、中文注记与网格覆盖层正常显示 |
 | 后台缩放范围默认值 | 通过，页面从后台配置输出 `minZoom（最小缩放）= 3` 与 `maxZoom（最大缩放）= 8` |
 | 插件设置元数据 | 通过，已注册 `settingName（设置名称）` 与 `configMapName（配置名称）` |
 | 编辑器小组件资源 | 通过，已生成 `src/main/resources/ui/main.js` 并接入 Gradle `processResources` |
-| 编辑器 `/` 菜单 | 通过，文章编辑器输入 `/` 后出现 `QSL 通联网格地图`，点击后插入 `[qsl-grid-map]` |
-| 编辑器小组件截图 | 通过，`tmp/qsl-grid-map-editor-slash-widget.png` 确认菜单项显示 |
+| 编辑器 `/` 菜单 | 通过，文章编辑器输入 `/` 后出现 `QSL 通联网格地图` |
+| 编辑器预览卡片 | 通过，点击菜单项后显示 `QSL 通联网格地图` 预览卡片；DOM 验证 `cardCount（卡片数量）= 1`、`hiddenCount（隐藏短码数量）= 1`、保存层仍包含 `[qsl-grid-map]` |
+| 编辑器小组件截图 | 通过，`tmp/qsl-grid-map-editor-slash-widget.png` 确认菜单项显示；`tmp/qsl-grid-map-editor-preview-card.png` 确认预览卡片显示 |
 
 已验证的 `qsl-management` 数据接口：
 
@@ -424,3 +428,4 @@ GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids?sceneType=QSO
 | --- | --- | --- |
 | Controller 页面接口带认证可访问，但匿名访问被 Halo 拦截 | 新增只匹配 `GET /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page` 的 `BeforeSecurityWebFilter` | 匿名访问返回地图页面，不进入登录页 |
 | 请求链路曾使用同步 `SettingFetcher（设置读取器）` 读取配置 | 改为 Halo 官方 `ReactiveSettingFetcher（响应式设置读取器）` | 避免 Reactor HTTP 线程阻塞，天地图配置可在匿名页面正常生效 |
+| 数据加载完成后自动 `fitBounds（适配范围）` 到全量通联网格，导致默认中心点被覆盖 | 移除有数据时的自动视图移动，只绘制网格图层 | 后台 `defaultCenterGrid（默认中心网格）` 与 `defaultZoom（默认缩放级别）` 在刷新后保持生效 |

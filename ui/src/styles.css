@@ -1,0 +1,43 @@
+.ProseMirror .qsl-grid-map-shortcode-preview-hidden {
+  display: none;
+}
+
+.ProseMirror .qsl-grid-map-shortcode-preview-card {
+  display: block;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #bdd7ff;
+  border-radius: 8px;
+  background: #f7fbff;
+}
+
+.ProseMirror .qsl-grid-map-shortcode-preview-card__title {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.ProseMirror .qsl-grid-map-shortcode-preview-card__subtitle {
+  margin-top: 4px;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ProseMirror .qsl-grid-map-shortcode-preview-card__remove {
+  margin-top: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  line-height: 20px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.ProseMirror .qsl-grid-map-shortcode-preview-card__remove:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+}

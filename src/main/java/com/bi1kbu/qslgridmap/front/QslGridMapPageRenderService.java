@@ -406,7 +406,7 @@ public class QslGridMapPageRenderService {
                   return [
                     '<div class="qsl-popup">',
                     `<h3 class="qsl-popup-title">${escapeHtml(item.grid || "")}</h3>`,
-                    `<p class="qsl-popup-meta">通联明细：${records.length}</p>`,
+                    `<p class="qsl-popup-meta">通联数量：${records.length}</p>`,
                     `<p class="qsl-popup-meta">呼号：${escapeHtml(calls.slice(0, 12).join("、"))}${calls.length > 12 ? " 等" : ""}</p>`,
                     "</div>"
                   ].join("");

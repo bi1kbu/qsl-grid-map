@@ -38,7 +38,8 @@ class QslGridMapPageRenderServiceTest {
     void renderUsesTiandituTileServiceAndBackendZoomSettings() {
         var html = service.render(
             QslGridMapPageRenderService.RenderOptions.empty(),
-            new QslGridMapPageRenderService.MapSettings("test-key-123", "secret-value", "OM89", 3, 3, 8)
+            new QslGridMapPageRenderService.MapSettings("test-key-123", "secret-value", "OM89", true, "#16a34a",
+                3, 3, 8)
         );
 
         assertThat(html).contains("https://t{s}.tianditu.gov.cn/DataServer?T=vec_w");
@@ -46,6 +47,8 @@ class QslGridMapPageRenderServiceTest {
         assertThat(html).contains("tk=${TIANDITU_CONFIG.appKey}");
         assertThat(html).contains("appKey: \"test-key-123\"");
         assertThat(html).contains("centerGrid: \"OM89\"");
+        assertThat(html).contains("showHomeGrid: true");
+        assertThat(html).contains("homeGridBorderColor: \"#16a34a\"");
         assertThat(html).contains("zoom: Number(\"3\") || 3");
         assertThat(html).contains("minZoom: Number(\"3\") || 3");
         assertThat(html).contains("maxZoom: Number(\"8\") || 8");
@@ -54,7 +57,24 @@ class QslGridMapPageRenderServiceTest {
         assertThat(html).contains("minZoom: DEFAULT_MAP_VIEW.minZoom");
         assertThat(html).contains("maxZoom: DEFAULT_MAP_VIEW.maxZoom");
         assertThat(html).contains("state.map.attributionControl.setPrefix(false);");
+        assertThat(html).contains("dashArray: \"6 4\"");
+        assertThat(html).contains("interactive: true");
+        assertThat(html).contains("本台网格：");
+        assertThat(html).contains("state.homeGridLayer.bringToFront();");
         assertThat(html).doesNotContain("secret-value");
+    }
+
+    @Test
+    void renderCanHideHomeGridLayer() {
+        var tiandituSettings = new QslGridMapPageRenderService.TiandituSettings();
+        var mapViewSettings = new QslGridMapPageRenderService.MapViewSettings();
+        mapViewSettings.setShowHomeGrid(false);
+
+        var settings = QslGridMapPageRenderService.normalizeSettings(tiandituSettings, mapViewSettings);
+        var html = service.render(QslGridMapPageRenderService.RenderOptions.empty(), settings);
+
+        assertThat(html).contains("showHomeGrid: false");
+        assertThat(html).contains("if (DEFAULT_MAP_VIEW.showHomeGrid)");
     }
 
     @Test
@@ -65,11 +85,14 @@ class QslGridMapPageRenderServiceTest {
         mapViewSettings.setDefaultZoom(99);
         mapViewSettings.setMinZoom(9);
         mapViewSettings.setMaxZoom(2);
+        mapViewSettings.setHomeGridBorderColor("red");
 
         var settings = QslGridMapPageRenderService.normalizeSettings(tiandituSettings, mapViewSettings);
         var html = service.render(QslGridMapPageRenderService.RenderOptions.empty(), settings);
 
         assertThat(html).contains("centerGrid: \"OM89\"");
+        assertThat(html).contains("showHomeGrid: true");
+        assertThat(html).contains("homeGridBorderColor: \"#dc2626\"");
         assertThat(html).contains("zoom: Number(\"8\") || 3");
         assertThat(html).contains("minZoom: Number(\"3\") || 3");
         assertThat(html).contains("maxZoom: Number(\"8\") || 8");

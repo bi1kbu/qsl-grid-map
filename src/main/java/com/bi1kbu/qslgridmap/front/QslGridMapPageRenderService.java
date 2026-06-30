@@ -8,7 +8,9 @@ public class QslGridMapPageRenderService {
 
     private static final Pattern GRID_PATTERN = Pattern.compile("^[A-R]{2}[0-9]{2}$");
     private static final Pattern TIANDITU_TOKEN_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{1,128}$");
+    private static final Pattern HEX_COLOR_PATTERN = Pattern.compile("^#[0-9A-Fa-f]{6}$");
     private static final String DEFAULT_CENTER_GRID = "OM89";
+    private static final String DEFAULT_HOME_GRID_BORDER_COLOR = "#dc2626";
     private static final int DEFAULT_ZOOM = 3;
     private static final int DEFAULT_MIN_ZOOM = 3;
     private static final int DEFAULT_MAX_ZOOM = 8;
@@ -27,6 +29,8 @@ public class QslGridMapPageRenderService {
             .replace("__TIANDITU_CONFIGURED__", Boolean.toString(normalizedSettings.tiandituConfigured()))
             .replace("__TIANDITU_APP_KEY_JS__", escapeJs(normalizedSettings.tiandituAppKey()))
             .replace("__DEFAULT_CENTER_GRID_JS__", escapeJs(normalizedSettings.defaultCenterGrid()))
+            .replace("__SHOW_HOME_GRID_JS__", Boolean.toString(normalizedSettings.showHomeGrid()))
+            .replace("__HOME_GRID_BORDER_COLOR_JS__", escapeJs(normalizedSettings.homeGridBorderColor()))
             .replace("__DEFAULT_ZOOM_JS__", Integer.toString(normalizedSettings.defaultZoom()))
             .replace("__MIN_ZOOM_JS__", Integer.toString(normalizedSettings.minZoom()))
             .replace("__MAX_ZOOM_JS__", Integer.toString(normalizedSettings.maxZoom()));
@@ -49,6 +53,8 @@ public class QslGridMapPageRenderService {
             normalizeTiandituToken(safeTiandituSettings.getAppKey()),
             normalizeTiandituToken(safeTiandituSettings.getSecretKey()),
             normalizeDefaultCenterGrid(safeMapViewSettings.getDefaultCenterGrid()),
+            normalizeShowHomeGrid(safeMapViewSettings.getShowHomeGrid()),
+            normalizeHomeGridBorderColor(safeMapViewSettings.getHomeGridBorderColor()),
             normalizeDefaultZoom(safeMapViewSettings.getDefaultZoom(), zoomRange.minZoom(), zoomRange.maxZoom()),
             zoomRange.minZoom(),
             zoomRange.maxZoom()
@@ -58,6 +64,15 @@ public class QslGridMapPageRenderService {
     private static String normalizeDefaultCenterGrid(String value) {
         var normalized = value == null ? "" : value.trim().toUpperCase();
         return GRID_PATTERN.matcher(normalized).matches() ? normalized : DEFAULT_CENTER_GRID;
+    }
+
+    private static boolean normalizeShowHomeGrid(Boolean value) {
+        return value == null || value;
+    }
+
+    private static String normalizeHomeGridBorderColor(String value) {
+        var normalized = value == null ? "" : value.trim();
+        return HEX_COLOR_PATTERN.matcher(normalized).matches() ? normalized : DEFAULT_HOME_GRID_BORDER_COLOR;
     }
 
     private static ZoomRange normalizeZoomRange(Integer minZoom, Integer maxZoom) {
@@ -115,12 +130,15 @@ public class QslGridMapPageRenderService {
         String tiandituAppKey,
         String tiandituSecretKey,
         String defaultCenterGrid,
+        boolean showHomeGrid,
+        String homeGridBorderColor,
         int defaultZoom,
         int minZoom,
         int maxZoom
     ) {
         public static MapSettings empty() {
-            return new MapSettings("", "", DEFAULT_CENTER_GRID, DEFAULT_ZOOM, DEFAULT_MIN_ZOOM, DEFAULT_MAX_ZOOM);
+            return new MapSettings("", "", DEFAULT_CENTER_GRID, true, DEFAULT_HOME_GRID_BORDER_COLOR, DEFAULT_ZOOM,
+                DEFAULT_MIN_ZOOM, DEFAULT_MAX_ZOOM);
         }
 
         public boolean tiandituConfigured() {
@@ -151,6 +169,8 @@ public class QslGridMapPageRenderService {
 
     public static class MapViewSettings {
         private String defaultCenterGrid;
+        private Boolean showHomeGrid;
+        private String homeGridBorderColor;
         private Integer defaultZoom;
         private Integer minZoom;
         private Integer maxZoom;
@@ -161,6 +181,22 @@ public class QslGridMapPageRenderService {
 
         public void setDefaultCenterGrid(String defaultCenterGrid) {
             this.defaultCenterGrid = defaultCenterGrid;
+        }
+
+        public Boolean getShowHomeGrid() {
+            return showHomeGrid;
+        }
+
+        public void setShowHomeGrid(Boolean showHomeGrid) {
+            this.showHomeGrid = showHomeGrid;
+        }
+
+        public String getHomeGridBorderColor() {
+            return homeGridBorderColor;
+        }
+
+        public void setHomeGridBorderColor(String homeGridBorderColor) {
+            this.homeGridBorderColor = homeGridBorderColor;
         }
 
         public Integer getDefaultZoom() {
@@ -276,6 +312,8 @@ public class QslGridMapPageRenderService {
                 };
                 const DEFAULT_MAP_VIEW = {
                   centerGrid: "__DEFAULT_CENTER_GRID_JS__",
+                  showHomeGrid: __SHOW_HOME_GRID_JS__,
+                  homeGridBorderColor: "__HOME_GRID_BORDER_COLOR_JS__",
                   zoom: Number("__DEFAULT_ZOOM_JS__") || 3,
                   minZoom: Number("__MIN_ZOOM_JS__") || 3,
                   maxZoom: Number("__MAX_ZOOM_JS__") || 8
@@ -285,6 +323,7 @@ public class QslGridMapPageRenderService {
                 const state = {
                   map: null,
                   layerGroup: null,
+                  homeGridLayer: null,
                   tileLayers: []
                 };
 
@@ -384,6 +423,31 @@ public class QslGridMapPageRenderService {
                     showNotice("请先在 Halo 后台的 QSL 通联网格地图插件设置中填写天地图应用 key。");
                   }
                   state.layerGroup = L.featureGroup().addTo(state.map);
+                  if (DEFAULT_MAP_VIEW.showHomeGrid) {
+                    renderHomeGrid();
+                  }
+                }
+
+                function renderHomeGrid() {
+                  if (!DEFAULT_MAP_VIEW.showHomeGrid) {
+                    return;
+                  }
+                  const bounds = gridBounds(DEFAULT_MAP_VIEW.centerGrid);
+                  if (!bounds) {
+                    return;
+                  }
+                  if (state.homeGridLayer) {
+                    state.homeGridLayer.remove();
+                  }
+                  state.homeGridLayer = L.rectangle(bounds, {
+                    color: DEFAULT_MAP_VIEW.homeGridBorderColor,
+                    weight: 3,
+                    fill: false,
+                    dashArray: "6 4",
+                    interactive: true
+                  })
+                    .bindPopup(`<div class="qsl-popup"><h3 class="qsl-popup-title">本台网格：${escapeHtml(DEFAULT_MAP_VIEW.centerGrid)}</h3></div>`)
+                    .addTo(state.map);
                 }
 
                 function colorFor(count, maxCount) {
@@ -429,6 +493,9 @@ public class QslGridMapPageRenderService {
                     })
                       .bindPopup(popupHtml(item))
                       .addTo(state.layerGroup);
+                  }
+                  if (state.homeGridLayer) {
+                    state.homeGridLayer.bringToFront();
                   }
 
                   if (validItems.length) {

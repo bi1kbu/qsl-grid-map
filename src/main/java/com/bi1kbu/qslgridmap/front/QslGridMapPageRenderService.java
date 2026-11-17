@@ -22,10 +22,16 @@ public class QslGridMapPageRenderService {
     }
 
     public String render(RenderOptions options, MapSettings settings) {
+        return render(options, settings, QslGridMapDataSource.Source.legacy(""));
+    }
+
+    public String render(RenderOptions options, MapSettings settings, QslGridMapDataSource.Source source) {
         var normalizedSettings = settings == null
             ? MapSettings.empty()
             : settings;
         return BASE_TEMPLATE
+            .replace("__API_URL_JS__", escapeJs(source.apiUrl()))
+            .replace("__MODERN_API__", Boolean.toString(source.modern()))
             .replace("__MAP_PROVIDER_JS__", normalizeProvider(normalizedSettings.provider()))
             .replace("__TIANDITU_CONFIGURED__", Boolean.toString(normalizedSettings.tiandituConfigured()))
             .replace("__TIANDITU_APP_KEY_JS__", escapeJs(normalizedSettings.tiandituAppKey()))
@@ -345,7 +351,8 @@ public class QslGridMapPageRenderService {
             ></script>
             <script>
               (() => {
-                const API_URL = "/apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids";
+                const API_URL = "__API_URL_JS__";
+                const MODERN_API = __MODERN_API__;
                 const MAP_PROVIDER = "__MAP_PROVIDER_JS__";
                 const TILE_LOAD_TIMEOUT = 15000;
                 const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -369,7 +376,9 @@ public class QslGridMapPageRenderService {
                   tileLayers: [],
                   provider: null,
                   tileTimers: new Map(),
-                  notices: new Map()
+                  notices: new Map(),
+                  homeGrid: null,
+                  showCallsigns: !MODERN_API
                 };
 
                 function safeText(value) {
@@ -415,7 +424,16 @@ public class QslGridMapPageRenderService {
                   if (result.code && result.code !== "QSL-0000") {
                     throw new Error(result.message || "接口返回异常。");
                   }
-                  return result.data ?? result;
+                  const data = MODERN_API ? result : (result.data ?? result);
+                  if (!Array.isArray(data.items)) {
+                    throw new Error("通联网格接口格式不正确。");
+                  }
+                  if (MODERN_API && (data.schemaVersion !== 1
+                      || !["INSTANCE", "ALL"].includes(data.scope)
+                      || typeof data.showCallsigns !== "boolean")) {
+                    throw new Error("QSL 3.0 网格接口版本或格式不受支持。");
+                  }
+                  return data;
                 }
 
                 function gridBounds(grid) {
@@ -730,7 +748,8 @@ public class QslGridMapPageRenderService {
                   if (!activeMapView.showHomeGrid) {
                     return;
                   }
-                  const bounds = gridBounds(activeMapView.centerGrid);
+                  const homeGrid = MODERN_API ? state.homeGrid : activeMapView.centerGrid;
+                  const bounds = gridBounds(homeGrid);
                   if (!bounds) {
                     return;
                   }
@@ -741,7 +760,7 @@ public class QslGridMapPageRenderService {
                     dashArray: "6 4",
                     interactive: true
                   })
-                    .bindPopup(`<div class="qsl-popup"><h3 class="qsl-popup-title">本台网格：${escapeHtml(activeMapView.centerGrid)}</h3></div>`)
+                    .bindPopup(`<div class="qsl-popup"><h3 class="qsl-popup-title">本台网格：${escapeHtml(homeGrid)}</h3></div>`)
                     .addTo(state.map);
                 }
 
@@ -760,13 +779,14 @@ public class QslGridMapPageRenderService {
                 }
 
                 function popupHtml(item) {
-                  const records = Array.isArray(item.records) ? item.records : [];
                   const calls = Array.isArray(item.callSigns) ? item.callSigns : [];
                   return [
                     '<div class="qsl-popup">',
                     `<h3 class="qsl-popup-title">${escapeHtml(item.grid || "")}</h3>`,
-                    `<p class="qsl-popup-meta">通联数量：${records.length}</p>`,
-                    `<p class="qsl-popup-meta">呼号：${escapeHtml(calls.slice(0, 12).join("、"))}${calls.length > 12 ? " 等" : ""}</p>`,
+                    `<p class="qsl-popup-meta">${MODERN_API ? "通联记录数" : "通联数量"}：${item.count}</p>`,
+                    state.showCallsigns
+                      ? `<p class="qsl-popup-meta">呼号：${escapeHtml(calls.slice(0, 12).join("、"))}${calls.length > 12 ? " 等" : ""}</p>`
+                      : "",
                     "</div>"
                   ].join("");
                 }
@@ -774,11 +794,11 @@ public class QslGridMapPageRenderService {
                 function renderMap(items) {
                   state.layerGroup.clearLayers();
                   const validItems = items.filter((item) => gridBounds(item.grid));
-                  const maxCount = Math.max(1, ...validItems.map((item) => (item.records || []).length));
+                  const maxCount = Math.max(1, ...validItems.map((item) => item.count));
 
                   for (const item of validItems) {
                     const bounds = gridBounds(item.grid);
-                    const count = (item.records || []).length;
+                    const count = item.count;
                     const color = colorFor(count, maxCount);
                     L.rectangle(bounds, {
                       color,
@@ -802,14 +822,28 @@ public class QslGridMapPageRenderService {
 
                 async function loadData() {
                   try {
-                    const response = await fetch(`${API_URL}?sceneType=QSO`, {
+                    const response = await fetch(API_URL, {
                       method: "GET",
                       credentials: "same-origin",
                       headers: { "Accept": "application/json" }
                     });
                     const result = await response.json();
+                    if (!response.ok) {
+                      throw new Error(result?.message || `通联网格读取失败（HTTP ${response.status}）。`);
+                    }
                     const data = getApiData(result);
-                    const items = Array.isArray(data.items) ? data.items : [];
+                    const items = data.items.map((item) => {
+                      const count = MODERN_API ? item.count : (Array.isArray(item.records) ? item.records.length : 0);
+                      if (!Number.isSafeInteger(count) || count < 0) {
+                        throw new Error("通联网格数量格式不正确。");
+                      }
+                      return { grid: item.grid, count, callSigns: item.callSigns };
+                    });
+                    if (MODERN_API) {
+                      state.homeGrid = data.scope === "INSTANCE" ? data.homeGrid : null;
+                      state.showCallsigns = data.showCallsigns;
+                      renderHomeGrid();
+                    }
                     renderMap(items);
                   } catch (error) {
                     showNotice(error?.message || "地图数据加载失败。", true);

@@ -57,6 +57,7 @@ async function page(fileName = "tianditu.html", options = {}) {
     .filter((match) => !/\bsrc\s*=/.test(match[1])).map((match) => match[2]);
   const elements = new Map();
   const resources = [];
+  const fetches = [];
   const maps = [];
   const tiles = [];
   const glLayers = [];
@@ -260,7 +261,7 @@ async function page(fileName = "tianditu.html", options = {}) {
   };
   const context = {
     document, L, URL, console: { ...console, warn: (...values) => warnings.push(values) }, Promise,
-    fetch: () => fetchPromise,
+    fetch: (url) => { fetches.push(url); return fetchPromise; },
     setTimeout(callback, delay) {
       const id = ++timerSequence;
       timers.set(id, { callback, at: now + Number(delay) });
@@ -297,12 +298,16 @@ async function page(fileName = "tianditu.html", options = {}) {
 
   await flush();
   return {
-    maps, tiles, glLayers, groups, rectangles, resources, warnings, flush, advance,
+    maps, tiles, glLayers, groups, rectangles, resources, warnings, flush, advance, fetches,
     notice: () => [...elements.values()].filter((item) => !item.classList.contains("hidden"))
       .map((item) => item.textContent).join("\n"),
     noticeIsError: () => elements.get("qsl-map-notice")?.style.color === "#b42318",
     async data(items = [{ grid: "OM89", records: [{}], callSigns: ["TEST"] }]) {
       resolveFetch({ ok: true, json: async () => ({ data: { items } }) });
+      await flush();
+    },
+    async response(result, status = 200) {
+      resolveFetch({ ok: status >= 200 && status < 300, status, json: async () => result });
       await flush();
     },
     async loaded() {
@@ -710,4 +715,58 @@ test("切换 OFM 后晚到的空数据不得把视图复位为任一服务的默
   assert.equal(map.getZoom(), 7);
   assert.deepEqual([map.getMinZoom(), map.getMaxZoom()], [5, 7]);
   assert.match(browser.notice(), /没有符合条件的 QSO/);
+});
+
+
+test("3.0按聚合数量绘制，使用实例本站网格且不重置视图", async () => {
+  const current = await page("modern.html");
+  assert.equal(current.rectangles.length, 0, "收到实例资料前不能画全站设置的本站网格");
+  const center = [...current.maps[0].views.at(-1).center];
+  const zoom = current.maps[0].getZoom();
+  await current.response({ schemaVersion: 1, scope: "INSTANCE", homeGrid: "FN20", showCallsigns: true,
+    items: [{ grid: "OM89", count: 25, callSigns: ["BG1ABC", "<script>"] }] });
+  assert.equal(current.fetches.length, 1);
+  assert.equal(current.fetches[0], "/blog/apis/api.qsl.halo.run/v1alpha1/public-grid-map?callsign=bi1kbu");
+  assert.equal(current.rectangles.length, 2);
+  assert.match(current.rectangles[0].popup, /本台网格：FN20/);
+  assert.match(current.rectangles[1].popup, /通联记录数：25/);
+  assert.match(current.rectangles[1].popup, /BG1ABC/);
+  assert.ok(!current.rectangles[1].popup.includes("<script>"));
+  assert.deepEqual(current.maps[0].views.at(-1).center, center);
+  assert.equal(current.maps[0].getZoom(), zoom);
+});
+
+test("3.0全站关闭呼号显示且不绘制本站，即使响应误带字段也不渲染", async () => {
+  const current = await page("modern.html");
+  await current.response({ schemaVersion: 1, scope: "ALL", homeGrid: "FN20", showCallsigns: false,
+    items: [{ grid: "OM89", count: 100, callSigns: ["SECRET"] }] });
+  assert.equal(current.rectangles.length, 1);
+  assert.match(current.rectangles[0].popup, /通联记录数：100/);
+  assert.ok(!current.rectangles[0].popup.includes("呼号"));
+  assert.ok(!current.rectangles[0].popup.includes("SECRET"));
+});
+
+for (const status of [403, 404, 409, 503]) {
+  test(`3.0接口${status}明确失败且不回退旧接口`, async () => {
+    const current = await page("modern.html");
+    await current.response({ message: "地图暂未开放" }, status);
+    assert.match(current.notice(), /地图暂未开放/);
+    assert.equal(current.noticeIsError(), true);
+    assert.equal(current.fetches.length, 1);
+    assert.equal(current.rectangles.length, 0);
+  });
+}
+
+test("3.0错误协议不冒充空地图", async () => {
+  const current = await page("modern.html");
+  await current.response({ data: { items: [] } });
+  assert.match(current.notice(), /格式不正确/);
+  assert.equal(current.fetches.length, 1);
+});
+
+test("2.x HTTP错误不能被当成空列表", async () => {
+  const current = await page();
+  await current.response({ message: "限制访问" }, 429);
+  assert.match(current.notice(), /限制访问/);
+  assert.equal(current.noticeIsError(), true);
 });

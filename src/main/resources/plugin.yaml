@@ -7,10 +7,10 @@ metadata:
   name: qsl-grid-map
 spec:
   enabled: true
-  version: 0.0.24
+  version: 0.0.25
   requires: ">=2.25.0"
   pluginDependencies:
-    qsl-management: ">=2.3.21"
+    qsl-management: ">=2.3.21 & <4.0.0"
   settingName: qsl-grid-map-setting
   configMapName: qsl-grid-map-config
   author:

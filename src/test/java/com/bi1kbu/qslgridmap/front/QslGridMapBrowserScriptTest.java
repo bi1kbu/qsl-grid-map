@@ -30,6 +30,11 @@ class QslGridMapBrowserScriptTest {
         writeCustomPage("fallback-higher.html", "tianditu", "test-key-123",
             new int[] {3, 2, 5}, new int[] {11, 10, 14}, true);
 
+        Files.writeString(fixtures.resolve("modern.html"), new QslGridMapPageRenderService().render(
+            QslGridMapPageRenderService.RenderOptions.empty(), QslGridMapPageRenderService.MapSettings.empty(),
+            new QslGridMapDataSource.Source(true, "/blog/apis/api.qsl.halo.run/v1alpha1/public-grid-map?callsign=bi1kbu")),
+            StandardCharsets.UTF_8);
+
         var output = fixtures.resolve("node-test-output.txt");
         var processBuilder = new ProcessBuilder("node", "--test",
             Path.of("src/test/js/map-page.test.cjs").toAbsolutePath().toString());

@@ -12,7 +12,11 @@
 /gridmap
 ```
 
-访问短链接会跳转到同站点的完整地图页面地址。若 Halo 部署在子路径下，请在短链接前保留该部署前缀，例如 `/blog/gridmap`。短链接不透传查询参数。
+搭配 QSL 3.0 时，`/gridmap` 显示站点默认呼号，`/gridmap/bi1kbu` 显示指定呼号，`/gridmap/all` 显示全站统计；短路径直接显示地图。搭配 2.x 时，原 `/gridmap` 继续跳转到完整页面，带呼号或 all 的新路径返回404。
+
+若 Halo 部署在子路径下，保留部署前缀，例如 `/blog/gridmap/bi1kbu`。短路径不透传查询参数，不能用查询参数更换路径指定的范围。普通短码继续显示默认地图。
+
+全站统计按 QSO 记录直接累计，不去重；它不受单实例公开开关影响，也计入已封锁实例。默认只显示网格和数量，只有超管能在 QSL 3.0 中开启全站对方呼号显示。个人地图的本站网格取该实例基本资料；缺失或全站地图不画本站标记。
 
 完整页面地址：
 
@@ -26,16 +30,19 @@
 [qsl-grid-map]
 ```
 
-数据来源：
+数据来源由服务端依据已安装的 QSL 插件版本选择：
 
-```text
-/apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids
-```
+| QSL版本 | 浏览器读取接口 |
+| --- | --- |
+| 2.x | `/apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids?sceneType=QSO` |
+| 3.0 | `/apis/api.qsl.halo.run/v1alpha1/public-grid-map`，可带 `callsign` |
+
+3.0须安装包含网格公开接口的版本。权限、未开放、维护或接口故障都明确显示错误，不会回退读取旧版日志。具体契约及已验范围见[兼容基线](docs/spec/qsl-v3-compatibility.md)。
 
 插件依赖：
 
 ```text
-qsl-management >=2.3.21
+qsl-management >=2.3.21 & <4.0.0
 ```
 
 ## 配置
@@ -99,7 +106,7 @@ http://localhost:8091
 当前产物示例：
 
 ```text
-build/libs/plugin-qsl-grid-map-0.0.24.jar
+build/libs/plugin-qsl-grid-map-0.0.25.jar
 ```
 
 ## 许可证

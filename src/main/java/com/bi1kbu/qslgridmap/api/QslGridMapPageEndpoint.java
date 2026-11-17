@@ -4,6 +4,7 @@ import static org.springframework.web.reactive.function.server.RequestPredicates
 import static org.springframework.web.reactive.function.server.RouterFunctions.route;
 
 import com.bi1kbu.qslgridmap.front.QslGridMapPageRenderService;
+import com.bi1kbu.qslgridmap.front.QslGridMapDataSource;
 import com.bi1kbu.qslgridmap.front.QslGridMapSettingsResolver;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -20,11 +21,13 @@ public class QslGridMapPageEndpoint implements CustomEndpoint {
 
     private final QslGridMapPageRenderService pageRenderService;
     private final ReactiveSettingFetcher settingFetcher;
+    private final QslGridMapDataSource sources;
 
     public QslGridMapPageEndpoint(QslGridMapPageRenderService pageRenderService,
-        ReactiveSettingFetcher settingFetcher) {
+        ReactiveSettingFetcher settingFetcher, QslGridMapDataSource sources) {
         this.pageRenderService = pageRenderService;
         this.settingFetcher = settingFetcher;
+        this.sources = sources;
     }
 
     @Override
@@ -38,26 +41,12 @@ public class QslGridMapPageEndpoint implements CustomEndpoint {
     }
 
     private Mono<ServerResponse> renderMapPage(ServerRequest request) {
-        var options = new QslGridMapPageRenderService.RenderOptions(
-            queryParam(request, "sceneType", "st"),
-            queryParam(request, "dateFrom", "df"),
-            queryParam(request, "dateTo", "dt"),
-            queryParam(request, "grid", "g"),
-            queryParam(request, "limit", "l"),
-            queryParam(request, "embed", "e"),
-            queryParam(request, "embedId", "eid")
-        );
-        return QslGridMapSettingsResolver.mapSettings(settingFetcher)
-            .flatMap(settings -> ServerResponse.ok()
-                .contentType(MediaType.TEXT_HTML)
-                .bodyValue(pageRenderService.render(options, settings)));
-    }
-
-    private String queryParam(ServerRequest request, String primary, String alias) {
-        var primaryValue = request.queryParam(primary).orElse("").trim();
-        if (!primaryValue.isBlank()) {
-            return primaryValue;
-        }
-        return request.queryParam(alias).orElse("").trim();
+        return sources.resolve(request.queryParam("callsign").orElse(""),
+                request.requestPath().contextPath().value())
+            .flatMap(source -> QslGridMapSettingsResolver.mapSettings(settingFetcher)
+                .flatMap(settings -> ServerResponse.ok()
+                    .header("Cache-Control", "no-store")
+                    .contentType(MediaType.TEXT_HTML)
+                    .bodyValue(pageRenderService.render(QslGridMapPageRenderService.RenderOptions.empty(), settings, source))));
     }
 }

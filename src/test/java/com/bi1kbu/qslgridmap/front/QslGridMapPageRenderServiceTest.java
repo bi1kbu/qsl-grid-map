@@ -34,7 +34,7 @@ class QslGridMapPageRenderServiceTest {
         ));
 
         assertThat(html).contains("/apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids");
-        assertThat(html).contains("`${API_URL}?sceneType=QSO`");
+        assertThat(html).contains("qso-public/grids?sceneType=QSO");
         assertThat(html).doesNotContain("/apis/qsl-grid-map.bi1kbu.com/v1alpha1/grids");
         assertThat(html).doesNotContain("tile.openstreetmap.org");
         assertThat(html).doesNotContain("dateFrom");

@@ -1,5 +1,7 @@
 # 业余无线电 GardMap 通联网格地图项目文档索引
 
+2026-11-17／0.0.25：[QSL 2.x／3.0适配基线](qsl-v3-compatibility.md)已实现，自动化与隔离构建通过；真实Halo双版本联调由主任务继续，尚不记为部署通过。56个JUnit全部通过，其中1个执行43个Node页面用例，两组不可相加。保留0.0.24地图服务及独立缩放。构建输出临时使用tmp/build-v3-compat，避开既有dev服务器锁住的class文件；日志tmp/qsl-v3-build-final.log。
+
 本文档是 `qsl-grid-map` 插件的结构化文档入口。
 
 ## 约束性文档

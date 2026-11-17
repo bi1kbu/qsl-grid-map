@@ -6,6 +6,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bi1kbu.qslgridmap.front.QslGridMapPageRenderService;
+import com.bi1kbu.qslgridmap.front.QslGridMapDataSource;
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.ArgumentMatchers;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,10 +24,17 @@ import run.halo.app.plugin.ReactiveSettingFetcher;
 class QslGridMapPublicPageFilterTest {
 
     private final ReactiveSettingFetcher settingFetcher = mock(ReactiveSettingFetcher.class);
+    private final QslGridMapDataSource sources = mock(QslGridMapDataSource.class);
     private final QslGridMapPublicPageFilter filter = new QslGridMapPublicPageFilter(
         new QslGridMapPageRenderService(),
-        settingFetcher
+        settingFetcher, sources
     );
+
+    @BeforeEach
+    void legacySource() {
+        when(sources.resolve(ArgumentMatchers.any(), ArgumentMatchers.anyString()))
+            .thenAnswer(invocation -> Mono.just(QslGridMapDataSource.Source.legacy(invocation.getArgument(1))));
+    }
 
     @Test
     void rendersPublicMapPageBeforeSecurityChain() {
@@ -60,7 +70,7 @@ class QslGridMapPublicPageFilterTest {
         assertThat(exchange.getResponse().getBodyAsString().block())
             .contains("QSL 通联网格地图")
             .contains("qsl-map-panel")
-            .contains("`${API_URL}?sceneType=QSO`")
+            .contains("qso-public/grids?sceneType=QSO")
             .contains("configured: true")
             .contains("appKey: \"official-key-123\"")
             .contains("centerGrid: \"OM89\"")
@@ -109,6 +119,49 @@ class QslGridMapPublicPageFilterTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"/gridmap/BI1KBU", "/gridmap/all", "/gridmap"})
+    void modernShortPathsRenderDirectlyAndIgnoreQueryOverrides(String path) {
+        when(sources.resolve(ArgumentMatchers.any(), ArgumentMatchers.anyString()))
+            .thenAnswer(invocation -> {
+                String target = invocation.getArgument(0);
+                String query = target.isEmpty() ? "" : "?callsign=" + target.toLowerCase(java.util.Locale.ROOT);
+                return Mono.just(new QslGridMapDataSource.Source(true,
+                    invocation.getArgument(1) + "/apis/api.qsl.halo.run/v1alpha1/public-grid-map" + query));
+            });
+        emptySettings();
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest
+            .get("/blog" + path + "?callsign=other&url=https://evil.invalid").contextPath("/blog").build());
+
+        filter.filter(exchange, chain -> Mono.error(new AssertionError("短路径应由地图处理"))).block();
+
+        assertThat(exchange.getResponse().getHeaders().getLocation()).isNull();
+        assertThat(exchange.getResponse().getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(exchange.getResponse().getBodyAsString().block())
+            .contains("const MODERN_API = true")
+            .contains("/blog/apis/api.qsl.halo.run/v1alpha1/public-grid-map")
+            .doesNotContain("callsign=other", "evil.invalid");
+    }
+
+    @Test
+    void versionFailureCannotRenderLegacyPage() {
+        when(sources.resolve(ArgumentMatchers.any(), ArgumentMatchers.anyString()))
+            .thenReturn(Mono.error(new IllegalStateException("private error")));
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/gridmap/BI1KBU").build());
+
+        filter.filter(exchange, chain -> Mono.empty()).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        assertThat(exchange.getResponse().getBodyAsString().block()).doesNotContain("private error", "qso-public");
+        verifyNoInteractions(settingFetcher);
+    }
+
+    private void emptySettings() {
+        when(settingFetcher.fetch("tianditu", QslGridMapPageRenderService.TiandituSettings.class)).thenReturn(Mono.empty());
+        when(settingFetcher.fetch("map", QslGridMapPageRenderService.MapViewSettings.class)).thenReturn(Mono.empty());
+        when(settingFetcher.fetch("openfreemap", QslGridMapPageRenderService.ZoomSettings.class)).thenReturn(Mono.empty());
+    }
+
+    @ParameterizedTest
     @CsvSource({
         "POST, /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page",
         "POST, /gridmap",
@@ -118,8 +171,10 @@ class QslGridMapPublicPageFilterTest {
         "HEAD, /gridmap",
         "OPTIONS, /gridmap",
         "GET, /gridmap/",
-        "GET, /gridmap/private",
         "GET, /gridmap-other",
+        "GET, /gridmap/bi1kbu/extra",
+        "GET, /gridmap/bi1kbu%2Fall",
+        "POST, /gridmap/all",
         "GET, /Gridmap",
         "GET, /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page/private"
     })

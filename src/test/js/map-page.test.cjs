@@ -345,6 +345,141 @@ for (const [index, name] of [[0, "底图"], [1, "注记"]]) {
   });
 }
 
+for (const [fileName, version] of [["tianditu.html", "2.x"], ["modern.html", "3.0"]]) {
+  test(`${version}成功切换提示显示满五秒后自动消失`, async () => {
+    const browser = await page(fileName);
+    if (version === "2.x") {
+      await browser.data();
+      browser.tiles[0].fire("tileerror");
+      await browser.flush();
+    } else {
+      await browser.response({ schemaVersion: 1, scope: "INSTANCE", homeGrid: "FN20", showCallsigns: false,
+        items: [{ grid: "OM89", count: 1 }] });
+    }
+    await browser.glLoaded();
+    assert.match(browser.notice(), /已切换至 OpenFreeMap（开放地图）。/);
+    await browser.advance(4999);
+    assert.match(browser.notice(), /已切换至 OpenFreeMap（开放地图）。/);
+    await browser.advance(1);
+    assert.equal(browser.notice(), "");
+    assert.equal(browser.glLayers.length, 1);
+    assert.equal(browser.rectangles.length, 2, "提示消失后保留本站和通联网格");
+  });
+}
+
+test("切换提示从首次成功绘制开始计时，加载等待不提前消耗五秒", async () => {
+  const browser = await page();
+  browser.tiles[0].fire("tileerror");
+  await browser.flush();
+  await browser.advance(6000);
+  assert.match(browser.notice(), /正在加载 OpenFreeMap/);
+  await browser.glLoaded();
+  await browser.advance(4999);
+  assert.match(browser.notice(), /天地图瓦片加载失败，已切换至 OpenFreeMap/);
+  await browser.advance(1);
+  assert.equal(browser.notice(), "");
+});
+
+test("重复首次绘制和空闲事件不能延长切换提示或令过期提示重新出现", async () => {
+  const browser = await page();
+  browser.tiles[0].fire("tileerror");
+  await browser.flush();
+  await browser.glLoaded();
+  const gl = browser.glLayers[0].gl;
+  await browser.advance(3000);
+  gl.fire("load").fire("idle").fire("load").fire("idle");
+  await browser.advance(1999);
+  assert.match(browser.notice(), /已切换至 OpenFreeMap/);
+  await browser.advance(1);
+  assert.equal(browser.notice(), "");
+  gl.fire("idle").fire("load").fire("idle");
+  await browser.advance(5000);
+  assert.equal(browser.notice(), "");
+});
+
+for (const [name, pattern, fail, recover] of [
+  ["瓦片", /有地图瓦片加载失败/, (gl) => gl.fire("error", { ...sourceTile(), error: new Error("测试瓦片失败") }),
+    (gl) => gl.fire("sourcedata", sourceTile())],
+  ["数据源", /有数据源加载失败/, (gl) => gl.fire("error", { sourceId: "openmaptiles", error: new Error("测试数据源失败") }),
+    (gl) => gl.fire("sourcedata", { dataType: "source", sourceId: "openmaptiles", sourceDataType: "metadata" })]
+]) {
+  test(`切换提示到期不能清除后续${name}错误，错误恢复后也不重弹切换提示`, async () => {
+    const browser = await page();
+    browser.tiles[0].fire("tileerror");
+    await browser.flush();
+    await browser.glLoaded();
+    const gl = browser.glLayers[0].gl;
+    await browser.advance(4000);
+    fail(gl);
+    assert.match(browser.notice(), pattern);
+    await browser.advance(1000);
+    assert.match(browser.notice(), pattern);
+    gl.fire("load").fire("idle");
+    assert.match(browser.notice(), pattern);
+    recover(gl);
+    gl.fire("idle");
+    assert.equal(browser.notice(), "");
+  });
+}
+
+test("切换提示到期保留后续 WebGL 错误，重新绘制后不重弹切换提示", async () => {
+  const browser = await page();
+  browser.tiles[0].fire("tileerror");
+  await browser.flush();
+  await browser.glLoaded();
+  const gl = browser.glLayers[0].gl;
+  await browser.advance(4000);
+  gl.fire("webglcontextlost");
+  await browser.advance(1000);
+  assert.match(browser.notice(), /上下文已丢失.*等待浏览器恢复/);
+  assert.equal(browser.noticeIsError(), true);
+  gl.complete = false;
+  gl.fire("webglcontextrestored").fire("idle");
+  assert.match(browser.notice(), /正在加载 OpenFreeMap/);
+  gl.complete = true;
+  gl.fire("idle").fire("load");
+  assert.equal(browser.notice(), "");
+});
+
+test("切换提示到期不能隐藏后续样式或通用资源错误", async () => {
+  const browser = await page();
+  browser.tiles[0].fire("tileerror");
+  await browser.flush();
+  await browser.glLoaded();
+  await browser.advance(4000);
+  browser.glLayers[0].gl.fire("error", { error: new Error("测试样式资源失败") });
+  await browser.advance(1000);
+  assert.match(browser.notice(), /样式或地图资源加载失败/);
+  assert.equal(browser.noticeIsError(), true);
+});
+
+test("2.x切换提示到期仅关闭底图通知，保留空数据提示", async () => {
+  const browser = await page();
+  browser.tiles[0].fire("tileerror");
+  await browser.flush();
+  await browser.glLoaded();
+  await browser.data([]);
+  assert.match(browser.notice(), /已切换至 OpenFreeMap/);
+  assert.match(browser.notice(), /没有符合条件的 QSO 通联网格数据/);
+  await browser.advance(5000);
+  assert.doesNotMatch(browser.notice(), /已切换至 OpenFreeMap/);
+  assert.match(browser.notice(), /没有符合条件的 QSO 通联网格数据/);
+  assert.equal(browser.noticeIsError(), false);
+});
+
+test("3.0切换提示到期仅关闭底图通知，保留接口错误提示", async () => {
+  const browser = await page("modern.html");
+  await browser.glLoaded();
+  await browser.response({ message: "地图暂未开放" }, 403);
+  assert.match(browser.notice(), /已切换至 OpenFreeMap/);
+  assert.match(browser.notice(), /地图暂未开放/);
+  await browser.advance(5000);
+  assert.doesNotMatch(browser.notice(), /已切换至 OpenFreeMap/);
+  assert.match(browser.notice(), /地图暂未开放/);
+  assert.equal(browser.noticeIsError(), true);
+  assert.equal(browser.fetches.length, 1, "底图通知过期不得重试其他版本的数据接口");
+});
+
 test("天地图首批瓦片等待满十五秒后启用备用地图", async () => {
   const browser = await page();
   await browser.advance(14999);

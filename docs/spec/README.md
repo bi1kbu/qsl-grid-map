@@ -1,6 +1,6 @@
 # 业余无线电 GardMap 通联网格地图项目文档索引
 
-2026-11-17／0.0.25：[QSL 2.x／3.0适配基线](qsl-v3-compatibility.md)已实现，自动化与隔离构建通过；真实Halo双版本联调由主任务继续，尚不记为部署通过。56个JUnit全部通过，其中1个执行43个Node页面用例，两组不可相加。保留0.0.24地图服务及独立缩放。构建输出临时使用tmp/build-v3-compat，避开既有dev服务器锁住的class文件；日志tmp/qsl-v3-build-final.log。
+2026-11-17／0.0.26：OpenFreeMap 切换成功提示显示 5 秒后自动消失，自动化、构建与当前仓库开发实例热重载通过；后续真实错误及数据提示保留。继承 [QSL 2.x／3.0 适配基线](qsl-v3-compatibility.md)，3.0 真实环境联调仍待完成。
 
 本文档是 `qsl-grid-map` 插件的结构化文档入口。
 
@@ -8,6 +8,7 @@
 
 1. `agents.md`：仓库协作、Halo2 插件开发、安全、构建与文档同步约定。
 2. `docs/spec/QSL网格地图插件开发方案.md`：产品边界、API 合同、安全设计、短码方案与验收标准，包含 2026-11-17 用户确认的 OpenFreeMap 兜底、地图短链接和 OFM 独立缩放参数基线。
+3. `docs/spec/qsl-v3-compatibility.md`：QSL 2.x／3.x 数据源选择、范围短路径与公开数据安全合同，覆盖较早仅 2.x 数据源和两条固定 GET 的限制。
 
 ## 输出性文档
 
@@ -17,22 +18,33 @@
 
 1. 插件标识：`qsl-grid-map`
 2. 插件显示名称：`业余无线电 GardMap 通联网格地图`
-3. 当前版本：`0.0.24`
+3. 当前版本：`0.0.26`
 4. Halo 目标版本：`>=2.25.0`
-5. 强依赖插件：`qsl-management >=2.3.21`
+5. 强依赖插件：`qsl-management >=2.3.21 & <4.0.0`
 6. 唯一插件 API：`GET /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page`
-7. 数据来源：`GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids`
+7. 数据来源：依据 Halo 插件版本元数据选择，2.x 使用 `GET /apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids?sceneType=QSO`，3.x 使用 `GET /apis/api.qsl.halo.run/v1alpha1/public-grid-map`；读取失败不回退另一版本。
 8. 短码：`[qsl-grid-map]`
 9. 编辑器小组件：默认编辑器输入 `/` 后选择 `QSL 通联网格地图`，编辑态显示预览卡片，保存层保留 `[qsl-grid-map]`
 10. CI/CD：复用 `halo-sigs/reusable-workflows`；CI 在 `main` 分支推送与 Pull Request 触发，CD 在 GitHub Release 发布时触发并发布到 Halo 应用市场 `app-rftgoicv`
 11. 地图服务：`map.provider（首选地图服务）` 由 Halo 持久化，默认天地图，可直接选择 OpenFreeMap；天地图底图或注记报错、每轮加载超时 15 秒后单向切换 OpenFreeMap，缺少应用令牌时直接使用 OpenFreeMap。
 12. 地图切换：保留当前中心点与通联网格，缩放超出 OFM 范围时调整到最近边界，本台网格标记与显示样式保留；地图服务与数据接口提示独立管理。OpenFreeMap 使用官方 Liberty 样式及 MapLibre GL Leaflet，需要 WebGL。
-13. 地图短链接：匿名 `GET /gridmap` 返回 302 至固定完整地图页；保留部署上下文前缀，不透传任何查询参数，不读取设置或私有数据。唯一插件 API 的 group/version 保持不变。
+13. 地图短链接：QSL 3.x 的匿名 `GET /gridmap`、`/gridmap/{callsign}`、`/gridmap/all` 直接显示默认、指定实例或全站地图；2.x 保留默认短路径固定 302，新增范围路径返回 404。保留实际部署上下文前缀，仅接受单段字母数字呼号，查询参数不能覆盖路径范围。原插件 API 的 group/version 保持不变。
 14. OpenFreeMap 状态：首次绘制超过 20 秒提示加载较慢，完成后恢复；组件资源仍每项限时 15 秒。地图资源错误独立记录并按对应资源恢复，避免已显示地图仍残留通用失败提示，也避免无关成功掩盖真实错误。
 
 15. 设置菜单依次为“地图显示”“天地图服务”“OpenFreeMap 服务”：`map（地图显示）` 保存首选服务、共用中心网格和本台网格开关/颜色；`tianditu（天地图服务）` 保存凭据与天地图缩放；`openfreemap（OpenFreeMap 服务）` 保存 OFM 缩放。两种服务的默认/最小/最大缩放各自为 `3 / 3 / 8`，不跨组回退，停止读取旧 `map（地图显示）` 缩放字段。
+16. 切换成功提示首次出现 5 秒后自动隐藏，后续加载或空闲事件不延长计时或重新弹出；加载中、慢加载、真实地图错误及数据空态/错误按各自状态保留。QSL 两个版本使用同一规则。
 
-## 最近验证：独立缩放（0.0.24）
+## 最近验证：切换成功提示自动隐藏（0.0.26）
+
+验证日期：2026-11-17。`.\gradlew.bat test` 与正式 `build` 通过，56 个 JUnit 用例全部通过，其中 1 个执行 53 个 Node 页面行为用例（较上一版本新增 10 个），两组计数不可相加。生成页面的模拟时钟与事件覆盖 5 秒边界、重复事件、后续错误保护、数据提示隔离及 QSL 2.x／3.x；本轮未单独进行浏览器真实计时验证。
+
+正式产物为 `build/libs/plugin-qsl-grid-map-0.0.26.jar`。核对容器挂载属于当前仓库 `build` 与 `workplace` 后，对 `halo-qsl-grid-map-development:8091` 执行 `reloadPlugin -x build（重载已构建插件）` 成功，插件已就绪。旧 `0.0.25` JAR 留存至 `tmp/notice-autohide/previous-build-jars`，避免多个版本同时进入开发类路径。构建与重载日志分别为 `tmp/notice-autohide-build.log`、`tmp/notice-autohide-reload.log`。
+
+## 上一轮 QSL 双版本适配（0.0.25）
+
+自动化与隔离构建通过：56 个 JUnit 用例中 1 个执行 43 个 Node 页面用例，不重复累计；日志 `tmp/qsl-v3-build-final.log`。原开发实例的 QSL 2.3.35 接口验证与热重载已完成，数据为空，未据此认定非空数据视觉验收或 QSL 3.0 真实联调通过。详见[适配基线与运行记录](qsl-v3-compatibility.md)。
+
+## 上一轮独立缩放（0.0.24）
 
 验证日期：2026-11-17，版本 `0.0.24`。三个设置菜单与“地图显示共用、缩放按服务独立”的结构已实现。沿用 Halo `Setting + ConfigMap（设置与配置）` 和 `ReactiveSettingFetcher（响应式设置读取器）`，已复核 API 合同、查看/编辑鉴权与角色映射保持不变。
 

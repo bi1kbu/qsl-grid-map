@@ -524,12 +524,15 @@ public class QslGridMapPageRenderService {
                   showNotice(`${reason}正在加载 OpenFreeMap（开放地图）…`, false, "basemap");
                   let layer;
                   let timer;
+                  let switchNoticeTimer;
                   let phase = "组件资源";
                   const status = {
                     rendered: false,
                     slow: false,
                     contextLost: false,
                     resourceError: false,
+                    switchNoticeStarted: false,
+                    switchNoticeExpired: false,
                     failedTiles: new Set(),
                     failedSources: new Set()
                   };
@@ -562,8 +565,16 @@ public class QslGridMapPageRenderService {
                       showNotice("OpenFreeMap（开放地图）加载较慢，仍在继续，请稍候。", false, "basemap");
                     } else if (!status.rendered) {
                       showNotice(`${reason}正在加载 OpenFreeMap（开放地图）…`, false, "basemap");
-                    } else if (reason) {
+                    } else if (reason && !status.switchNoticeExpired) {
                       showNotice(`${reason}已切换至 OpenFreeMap（开放地图）。`, false, "basemap");
+                      if (!status.switchNoticeStarted) {
+                        status.switchNoticeStarted = true;
+                        switchNoticeTimer = setTimeout(() => {
+                          status.switchNoticeExpired = true;
+                          // 重新判断状态，避免旧计时器隐藏后来出现的真实错误。
+                          refreshStatus();
+                        }, 5000);
+                      }
                     } else {
                       hideNotice("basemap");
                     }
@@ -664,6 +675,7 @@ public class QslGridMapPageRenderService {
                     }
                     clearTimeout(timer);
                     diagnose(phase);
+                    clearTimeout(switchNoticeTimer);
                     const message = phase === "组件资源"
                       ? "组件资源加载失败或超时，请检查静态资源访问后刷新重试。"
                       : phase === "地图初始化"

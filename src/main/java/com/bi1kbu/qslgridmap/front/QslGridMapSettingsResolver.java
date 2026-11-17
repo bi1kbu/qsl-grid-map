@@ -10,6 +10,7 @@ public final class QslGridMapSettingsResolver {
     private static final Logger LOG = LoggerFactory.getLogger(QslGridMapSettingsResolver.class);
     private static final String TIANDITU_GROUP = "tianditu";
     private static final String MAP_GROUP = "map";
+    private static final String OPENFREEMAP_GROUP = "openfreemap";
 
     private QslGridMapSettingsResolver() {
     }
@@ -22,8 +23,12 @@ public final class QslGridMapSettingsResolver {
         var mapViewSettings = settingFetcher
             .fetch(MAP_GROUP, QslGridMapPageRenderService.MapViewSettings.class)
             .defaultIfEmpty(new QslGridMapPageRenderService.MapViewSettings());
-        return Mono.zip(tiandituSettings, mapViewSettings)
-            .map(tuple -> QslGridMapPageRenderService.normalizeSettings(tuple.getT1(), tuple.getT2()))
+        var openFreeMapSettings = settingFetcher
+            .fetch(OPENFREEMAP_GROUP, QslGridMapPageRenderService.ZoomSettings.class)
+            .defaultIfEmpty(new QslGridMapPageRenderService.ZoomSettings());
+        return Mono.zip(tiandituSettings, mapViewSettings, openFreeMapSettings)
+            .map(tuple -> QslGridMapPageRenderService.normalizeSettings(
+                tuple.getT1(), tuple.getT2(), tuple.getT3()))
             .defaultIfEmpty(QslGridMapPageRenderService.MapSettings.empty())
             .onErrorResume(error -> {
                 LOG.warn("读取地图插件设置失败，页面将以默认配置渲染。", error);

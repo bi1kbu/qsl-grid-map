@@ -26,39 +26,57 @@ public class QslGridMapPageRenderService {
             ? MapSettings.empty()
             : settings;
         return BASE_TEMPLATE
+            .replace("__MAP_PROVIDER_JS__", normalizeProvider(normalizedSettings.provider()))
             .replace("__TIANDITU_CONFIGURED__", Boolean.toString(normalizedSettings.tiandituConfigured()))
             .replace("__TIANDITU_APP_KEY_JS__", escapeJs(normalizedSettings.tiandituAppKey()))
-            .replace("__DEFAULT_CENTER_GRID_JS__", escapeJs(normalizedSettings.defaultCenterGrid()))
-            .replace("__SHOW_HOME_GRID_JS__", Boolean.toString(normalizedSettings.showHomeGrid()))
-            .replace("__HOME_GRID_BORDER_COLOR_JS__", escapeJs(normalizedSettings.homeGridBorderColor()))
-            .replace("__DEFAULT_ZOOM_JS__", Integer.toString(normalizedSettings.defaultZoom()))
-            .replace("__MIN_ZOOM_JS__", Integer.toString(normalizedSettings.minZoom()))
-            .replace("__MAX_ZOOM_JS__", Integer.toString(normalizedSettings.maxZoom()));
+            .replace("__TIANDITU_VIEW_JS__", renderMapView(normalizedSettings.tianditu()))
+            .replace("__OPENFREEMAP_VIEW_JS__", renderMapView(normalizedSettings.openfreemap()));
     }
 
-    public static MapSettings normalizeTiandituSettings(TiandituSettings settings) {
-        return normalizeSettings(settings, null);
+    private String renderMapView(MapDisplaySettings settings) {
+        return """
+            {
+              centerGrid: "%s",
+              showHomeGrid: %s,
+              homeGridBorderColor: "%s",
+              zoom: %d,
+              minZoom: %d,
+              maxZoom: %d
+            }
+            """.formatted(escapeJs(settings.defaultCenterGrid()), settings.showHomeGrid(),
+            escapeJs(settings.homeGridBorderColor()), settings.defaultZoom(), settings.minZoom(), settings.maxZoom());
     }
 
     public static MapSettings normalizeSettings(TiandituSettings tiandituSettings,
-        MapViewSettings mapViewSettings) {
-        var safeMapViewSettings = mapViewSettings == null
-            ? new MapViewSettings()
-            : mapViewSettings;
+        MapViewSettings mapViewSettings, ZoomSettings openFreeMapSettings) {
         var safeTiandituSettings = tiandituSettings == null
             ? new TiandituSettings()
             : tiandituSettings;
-        var zoomRange = normalizeZoomRange(safeMapViewSettings.getMinZoom(), safeMapViewSettings.getMaxZoom());
         return new MapSettings(
             normalizeTiandituToken(safeTiandituSettings.getAppKey()),
             normalizeTiandituToken(safeTiandituSettings.getSecretKey()),
+            normalizeProvider(mapViewSettings == null ? null : mapViewSettings.getProvider()),
+            normalizeMapView(mapViewSettings, safeTiandituSettings),
+            normalizeMapView(mapViewSettings, openFreeMapSettings)
+        );
+    }
+
+    private static MapDisplaySettings normalizeMapView(MapViewSettings settings, ZoomSettings zoomSettings) {
+        var safeMapViewSettings = settings == null ? new MapViewSettings() : settings;
+        var safeZoomSettings = zoomSettings == null ? new ZoomSettings() : zoomSettings;
+        var zoomRange = normalizeZoomRange(safeZoomSettings.getMinZoom(), safeZoomSettings.getMaxZoom());
+        return new MapDisplaySettings(
             normalizeDefaultCenterGrid(safeMapViewSettings.getDefaultCenterGrid()),
             normalizeShowHomeGrid(safeMapViewSettings.getShowHomeGrid()),
             normalizeHomeGridBorderColor(safeMapViewSettings.getHomeGridBorderColor()),
-            normalizeDefaultZoom(safeMapViewSettings.getDefaultZoom(), zoomRange.minZoom(), zoomRange.maxZoom()),
+            normalizeDefaultZoom(safeZoomSettings.getDefaultZoom(), zoomRange.minZoom(), zoomRange.maxZoom()),
             zoomRange.minZoom(),
             zoomRange.maxZoom()
         );
+    }
+
+    private static String normalizeProvider(String value) {
+        return "openfreemap".equals(value) ? "openfreemap" : "tianditu";
     }
 
     private static String normalizeDefaultCenterGrid(String value) {
@@ -129,16 +147,12 @@ public class QslGridMapPageRenderService {
     public record MapSettings(
         String tiandituAppKey,
         String tiandituSecretKey,
-        String defaultCenterGrid,
-        boolean showHomeGrid,
-        String homeGridBorderColor,
-        int defaultZoom,
-        int minZoom,
-        int maxZoom
+        String provider,
+        MapDisplaySettings tianditu,
+        MapDisplaySettings openfreemap
     ) {
         public static MapSettings empty() {
-            return new MapSettings("", "", DEFAULT_CENTER_GRID, true, DEFAULT_HOME_GRID_BORDER_COLOR, DEFAULT_ZOOM,
-                DEFAULT_MIN_ZOOM, DEFAULT_MAX_ZOOM);
+            return normalizeSettings(null, null, null);
         }
 
         public boolean tiandituConfigured() {
@@ -146,7 +160,20 @@ public class QslGridMapPageRenderService {
         }
     }
 
-    public static class TiandituSettings {
+    public record MapDisplaySettings(
+        String defaultCenterGrid,
+        boolean showHomeGrid,
+        String homeGridBorderColor,
+        int defaultZoom,
+        int minZoom,
+        int maxZoom
+    ) {
+        public static MapDisplaySettings defaults() {
+            return normalizeMapView(null, null);
+        }
+    }
+
+    public static class TiandituSettings extends ZoomSettings {
         private String appKey;
         private String secretKey;
 
@@ -168,12 +195,18 @@ public class QslGridMapPageRenderService {
     }
 
     public static class MapViewSettings {
+        private String provider;
         private String defaultCenterGrid;
         private Boolean showHomeGrid;
         private String homeGridBorderColor;
-        private Integer defaultZoom;
-        private Integer minZoom;
-        private Integer maxZoom;
+
+        public String getProvider() {
+            return provider;
+        }
+
+        public void setProvider(String provider) {
+            this.provider = provider;
+        }
 
         public String getDefaultCenterGrid() {
             return defaultCenterGrid;
@@ -198,6 +231,12 @@ public class QslGridMapPageRenderService {
         public void setHomeGridBorderColor(String homeGridBorderColor) {
             this.homeGridBorderColor = homeGridBorderColor;
         }
+    }
+
+    public static class ZoomSettings {
+        private Integer defaultZoom;
+        private Integer minZoom;
+        private Integer maxZoom;
 
         public Integer getDefaultZoom() {
             return defaultZoom;
@@ -271,6 +310,7 @@ public class QslGridMapPageRenderService {
                 padding: 8px 10px;
                 font-size: 13px;
                 line-height: 1.45;
+                white-space: pre-line;
                 box-shadow: 0 8px 22px rgba(25, 35, 50, 0.08);
               }
               .qsl-map-notice.hidden {
@@ -295,7 +335,7 @@ public class QslGridMapPageRenderService {
           <body>
             <div class="qsl-map-panel">
               <div id="qsl-map"></div>
-              <div id="qsl-map-notice" class="qsl-map-notice hidden"></div>
+              <div id="qsl-map-notice" class="qsl-map-notice hidden" role="status" aria-live="polite"></div>
             </div>
 
             <script
@@ -306,25 +346,30 @@ public class QslGridMapPageRenderService {
             <script>
               (() => {
                 const API_URL = "/apis/api.qsl-management.bi1kbu.com/v1alpha1/qso-public/grids";
+                const MAP_PROVIDER = "__MAP_PROVIDER_JS__";
+                const TILE_LOAD_TIMEOUT = 15000;
+                const OPENFREEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
                 const TIANDITU_CONFIG = {
                   configured: __TIANDITU_CONFIGURED__,
                   appKey: "__TIANDITU_APP_KEY_JS__"
                 };
-                const DEFAULT_MAP_VIEW = {
-                  centerGrid: "__DEFAULT_CENTER_GRID_JS__",
-                  showHomeGrid: __SHOW_HOME_GRID_JS__,
-                  homeGridBorderColor: "__HOME_GRID_BORDER_COLOR_JS__",
-                  zoom: Number("__DEFAULT_ZOOM_JS__") || 3,
-                  minZoom: Number("__MIN_ZOOM_JS__") || 3,
-                  maxZoom: Number("__MAX_ZOOM_JS__") || 8
+                const MAP_VIEWS = {
+                  tianditu: __TIANDITU_VIEW_JS__,
+                  openfreemap: __OPENFREEMAP_VIEW_JS__
                 };
+                let activeMapView = MAP_VIEWS[
+                  MAP_PROVIDER === "openfreemap" || !TIANDITU_CONFIG.configured ? "openfreemap" : "tianditu"
+                ];
 
                 const mapNotice = document.getElementById("qsl-map-notice");
                 const state = {
                   map: null,
                   layerGroup: null,
                   homeGridLayer: null,
-                  tileLayers: []
+                  tileLayers: [],
+                  provider: null,
+                  tileTimers: new Map(),
+                  notices: new Map()
                 };
 
                 function safeText(value) {
@@ -344,15 +389,23 @@ public class QslGridMapPageRenderService {
                   return safeText(value).trim().toUpperCase().slice(0, 4);
                 }
 
-                function showNotice(text, error = false) {
-                  mapNotice.classList.remove("hidden");
-                  mapNotice.textContent = text;
+                function updateNotice() {
+                  const notices = [...state.notices.values()];
+                  mapNotice.classList.toggle("hidden", notices.length === 0);
+                  mapNotice.textContent = notices.map((notice) => notice.text).join("\\n");
+                  const error = notices.some((notice) => notice.error);
                   mapNotice.style.borderColor = error ? "#ffd8d2" : "#d6e4ff";
                   mapNotice.style.color = error ? "#b42318" : "#30445f";
                 }
 
-                function hideNotice() {
-                  mapNotice.classList.add("hidden");
+                function showNotice(text, error = false, channel = "data") {
+                  state.notices.set(channel, { text, error });
+                  updateNotice();
+                }
+
+                function hideNotice(channel = "data") {
+                  state.notices.delete(channel);
+                  updateNotice();
                 }
 
                 function getApiData(result) {
@@ -389,8 +442,268 @@ public class QslGridMapPageRenderService {
                 }
 
                 function defaultMapCenter() {
-                  const bounds = gridBounds(DEFAULT_MAP_VIEW.centerGrid);
+                  const bounds = gridBounds(activeMapView.centerGrid);
                   return bounds ? centerOf(bounds) : [39.5, 117];
+                }
+
+                function loadMapResource(tag, url, integrity) {
+                  return new Promise((resolve, reject) => {
+                    const element = document.createElement(tag);
+                    const timer = setTimeout(() => finish(false), TILE_LOAD_TIMEOUT);
+                    function finish(success) {
+                      clearTimeout(timer);
+                      element.onload = null;
+                      element.onerror = null;
+                      if (success) {
+                        resolve();
+                      } else {
+                        element.remove();
+                        reject(new Error("开放地图组件加载失败或超时。"));
+                      }
+                    }
+                    element.integrity = integrity;
+                    element.crossOrigin = "anonymous";
+                    element.onload = () => finish(true);
+                    element.onerror = () => finish(false);
+                    if (tag === "link") {
+                      element.rel = "stylesheet";
+                      element.href = url;
+                    } else {
+                      element.src = url;
+                      element.async = true;
+                    }
+                    document.head.appendChild(element);
+                  });
+                }
+
+                async function loadOpenFreeMapResources() {
+                  await Promise.all([
+                    loadMapResource("link", "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css",
+                      "sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK"),
+                    loadMapResource("script", "https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js",
+                      "sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp")
+                  ]);
+                  await loadMapResource("script",
+                    "https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js",
+                    "sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS");
+                }
+
+                async function useOpenFreeMap(reason = "") {
+                  // 先锁定服务，阻止同一批失败瓦片重复创建地图与下载资源。
+                  if (state.provider === "openfreemap") {
+                    return;
+                  }
+                  state.provider = "openfreemap";
+                  state.tileTimers.forEach((timer) => clearTimeout(timer));
+                  state.tileTimers.clear();
+                  state.tileLayers.forEach((layer) => {
+                    // 先触发 Leaflet 的移除钩子，清理地图事件和旧服务署名。
+                    layer.remove();
+                    layer.off();
+                  });
+                  state.tileLayers = [];
+                  applyOpenFreeMapView();
+                  showNotice(`${reason}正在加载 OpenFreeMap（开放地图）…`, false, "basemap");
+                  let layer;
+                  let timer;
+                  let phase = "组件资源";
+                  const status = {
+                    rendered: false,
+                    slow: false,
+                    contextLost: false,
+                    resourceError: false,
+                    failedTiles: new Set(),
+                    failedSources: new Set()
+                  };
+                  const diagnose = (stage, event = {}) => {
+                    // 不输出原始异常、资源地址或查询参数，防止诊断日志包含令牌。
+                    console.warn("OpenFreeMap（开放地图）加载诊断", {
+                      阶段: stage,
+                      来源: ["ne2_shaded", "openmaptiles"].includes(event.sourceId) ? event.sourceId : "未指定",
+                      状态码: Number.isInteger(event.error?.status) ? event.error.status : "未知"
+                    });
+                  };
+                  const tileKey = (event) => {
+                    const coordinate = event.coord ?? event.tile?.tileID;
+                    const canonical = coordinate?.canonical;
+                    // 同坐标瓦片重新创建后仍可消除旧错误，世界副本共用同一资源。
+                    return canonical
+                      ? `${event.sourceId}:${canonical.z}/${canonical.x}/${canonical.y}`
+                      : event.tile;
+                  };
+                  const refreshStatus = () => {
+                    if (status.contextLost) {
+                      showNotice("OpenFreeMap（开放地图）绘图上下文已丢失，正在等待浏览器恢复。", true, "basemap");
+                    } else if (status.resourceError) {
+                      showNotice("OpenFreeMap（开放地图）样式或地图资源加载失败，请检查地图服务连接后刷新重试。", true, "basemap");
+                    } else if (status.failedSources.size) {
+                      showNotice("OpenFreeMap（开放地图）有数据源加载失败，请检查地图服务连接后重试。", true, "basemap");
+                    } else if (status.failedTiles.size) {
+                      showNotice("OpenFreeMap（开放地图）有地图瓦片加载失败，已加载区域仍可浏览；请稍后重试。", false, "basemap");
+                    } else if (status.slow) {
+                      showNotice("OpenFreeMap（开放地图）加载较慢，仍在继续，请稍候。", false, "basemap");
+                    } else if (!status.rendered) {
+                      showNotice(`${reason}正在加载 OpenFreeMap（开放地图）…`, false, "basemap");
+                    } else if (reason) {
+                      showNotice(`${reason}已切换至 OpenFreeMap（开放地图）。`, false, "basemap");
+                    } else {
+                      hideNotice("basemap");
+                    }
+                  };
+                  const watchLoading = () => {
+                    clearTimeout(timer);
+                    timer = setTimeout(() => {
+                      status.slow = true;
+                      refreshStatus();
+                    }, 20000);
+                  };
+                  try {
+                    await loadOpenFreeMapResources();
+                    phase = "地图初始化";
+                    layer = L.maplibreGL({
+                      style: null,
+                      interactive: false,
+                      attributionControl: {
+                        customAttribution: '<a href="https://openfreemap.org/">OpenFreeMap（开放地图）</a> · &copy; <a href="https://www.openmaptiles.org/">OpenMapTiles</a> · &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap 贡献者</a>'
+                      }
+                    });
+                    layer.addTo(state.map);
+                    const glMap = layer.getMaplibreMap();
+                    glMap.on("error", (event) => {
+                      if (event.tile) {
+                        const key = tileKey(event);
+                        if (!status.failedTiles.has(key)) {
+                          diagnose("地图瓦片", event);
+                        }
+                        status.failedTiles.add(key);
+                      } else if (event.sourceId) {
+                        diagnose("地图数据源", event);
+                        status.failedSources.add(event.sourceId);
+                      } else {
+                        diagnose("地图样式或资源", event);
+                        status.resourceError = true;
+                      }
+                      refreshStatus();
+                    });
+                    glMap.on("sourcedata", (event) => {
+                      let recovered = false;
+                      if (event.tile) {
+                        recovered = status.failedTiles.delete(tileKey(event));
+                      }
+                      if (event.sourceDataType === "metadata") {
+                        recovered = status.failedSources.delete(event.sourceId) || recovered;
+                      }
+                      if (recovered) {
+                        refreshStatus();
+                      }
+                    });
+                    glMap.on("webglcontextlost", () => {
+                      clearTimeout(timer);
+                      status.contextLost = true;
+                      diagnose("绘图上下文丢失");
+                      refreshStatus();
+                    });
+                    glMap.on("webglcontextrestored", () => {
+                      status.contextLost = false;
+                      status.rendered = false;
+                      status.slow = false;
+                      watchLoading();
+                      refreshStatus();
+                    });
+                    const rendered = () => {
+                      if (status.contextLost) {
+                        return;
+                      }
+                      clearTimeout(timer);
+                      status.rendered = true;
+                      status.slow = false;
+                      // 完成事件也可能包含失败瓦片，只有对应资源成功才清除其错误。
+                      refreshStatus();
+                    };
+                    glMap.on("load", rendered);
+                    glMap.on("idle", () => {
+                      if (glMap.loaded()) {
+                        rendered();
+                      }
+                    });
+                    phase = "地图样式";
+                    watchLoading();
+                    glMap.setStyle(OPENFREEMAP_STYLE);
+                  } catch (error) {
+                    if (layer) {
+                      try {
+                        // 桥接库 0.1.4 在 WebGL 构造失败后没有可销毁的实例。
+                        // 使用安全移除钩子，让 Leaflet 继续释放图层注册表与事件。
+                        if (!layer.getMaplibreMap()) {
+                          layer.onRemove = () => layer.getContainer()?.remove();
+                        }
+                        layer.remove();
+                      } catch (cleanupError) {
+                        // 桥接库初始化 WebGL 失败时仍可能留下事件，解除绑定以保留网格交互。
+                        state.map.off(layer.getEvents(), layer);
+                        layer.getContainer()?.remove();
+                      }
+                    }
+                    clearTimeout(timer);
+                    diagnose(phase);
+                    const message = phase === "组件资源"
+                      ? "组件资源加载失败或超时，请检查静态资源访问后刷新重试。"
+                      : phase === "地图初始化"
+                        ? "初始化失败，请检查浏览器 WebGL 支持后刷新重试。"
+                        : "样式加载失败，请检查地图服务连接后刷新重试。";
+                    showNotice(`OpenFreeMap（开放地图）${message}`, true, "basemap");
+                  }
+                }
+
+                function applyOpenFreeMapView() {
+                  if (activeMapView === MAP_VIEWS.openfreemap) {
+                    return;
+                  }
+                  const center = state.map.getCenter();
+                  const zoom = state.map.getZoom();
+                  activeMapView = MAP_VIEWS.openfreemap;
+                  // 范围互不相交时先扩展对应边界，避免中间出现最小值大于最大值。
+                  if (activeMapView.minZoom > state.map.getMaxZoom()) {
+                    state.map.setMaxZoom(activeMapView.maxZoom);
+                    state.map.setMinZoom(activeMapView.minZoom);
+                  } else {
+                    state.map.setMinZoom(activeMapView.minZoom);
+                    state.map.setMaxZoom(activeMapView.maxZoom);
+                  }
+                  const boundedZoom = Math.max(activeMapView.minZoom, Math.min(activeMapView.maxZoom, zoom));
+                  state.map.setView(center, boundedZoom, { animate: false });
+                }
+
+                function initBaseMap() {
+                  if (MAP_PROVIDER === "openfreemap" || !TIANDITU_CONFIG.configured) {
+                    useOpenFreeMap(MAP_PROVIDER === "openfreemap" ? "" : "未配置天地图应用 key，");
+                    return;
+                  }
+                  state.provider = "tianditu";
+                  const tileOptions = {
+                    minZoom: activeMapView.minZoom,
+                    maxZoom: activeMapView.maxZoom,
+                    subdomains: "01234567",
+                    attribution: '&copy; <a href="https://www.tianditu.gov.cn/">天地图</a>'
+                  };
+                  const baseLayer = L.tileLayer(`https://t{s}.tianditu.gov.cn/DataServer?T=vec_w&x={x}&y={y}&l={z}&tk=${TIANDITU_CONFIG.appKey}`, tileOptions);
+                  const labelLayer = L.tileLayer(`https://t{s}.tianditu.gov.cn/DataServer?T=cva_w&x={x}&y={y}&l={z}&tk=${TIANDITU_CONFIG.appKey}`, tileOptions);
+                  state.tileLayers = [baseLayer, labelLayer];
+                  state.tileLayers.forEach((layer) => {
+                    const stopTimer = () => {
+                      clearTimeout(state.tileTimers.get(layer));
+                      state.tileTimers.delete(layer);
+                    };
+                    layer.on("loading", () => {
+                      stopTimer();
+                      state.tileTimers.set(layer, setTimeout(() => {
+                        useOpenFreeMap("天地图瓦片加载超时，");
+                      }, TILE_LOAD_TIMEOUT));
+                    });
+                    layer.on("load", stopTimer);
+                    layer.on("tileerror", () => useOpenFreeMap("天地图瓦片加载失败，"));
+                    layer.addTo(state.map);
+                  });
                 }
 
                 function initMap() {
@@ -400,53 +713,35 @@ public class QslGridMapPageRenderService {
                   state.map = L.map("qsl-map", {
                     worldCopyJump: true,
                     zoomControl: true,
-                    minZoom: DEFAULT_MAP_VIEW.minZoom,
-                    maxZoom: DEFAULT_MAP_VIEW.maxZoom
-                  }).setView(defaultMapCenter(), DEFAULT_MAP_VIEW.zoom);
+                    minZoom: activeMapView.minZoom,
+                    maxZoom: activeMapView.maxZoom
+                  }).setView(defaultMapCenter(), activeMapView.zoom);
                   state.map.attributionControl.setPrefix(false);
-                  if (TIANDITU_CONFIG.configured) {
-                    const tileOptions = {
-                      minZoom: DEFAULT_MAP_VIEW.minZoom,
-                      maxZoom: DEFAULT_MAP_VIEW.maxZoom,
-                      subdomains: "01234567",
-                      attribution: '&copy; <a href="https://www.tianditu.gov.cn/">天地图</a>'
-                    };
-                    const baseLayer = L.tileLayer(`https://t{s}.tianditu.gov.cn/DataServer?T=vec_w&x={x}&y={y}&l={z}&tk=${TIANDITU_CONFIG.appKey}`, tileOptions)
-                      .on("tileerror", () => {
-                        showNotice("天地图瓦片加载失败，请检查插件设置中的应用 key、域名白名单和当前网络。", true);
-                      })
-                      .addTo(state.map);
-                    const labelLayer = L.tileLayer(`https://t{s}.tianditu.gov.cn/DataServer?T=cva_w&x={x}&y={y}&l={z}&tk=${TIANDITU_CONFIG.appKey}`, tileOptions)
-                      .addTo(state.map);
-                    state.tileLayers = [baseLayer, labelLayer];
-                  } else {
-                    showNotice("请先在 Halo 后台的 QSL 通联网格地图插件设置中填写天地图应用 key。");
-                  }
                   state.layerGroup = L.featureGroup().addTo(state.map);
-                  if (DEFAULT_MAP_VIEW.showHomeGrid) {
-                    renderHomeGrid();
-                  }
+                  renderHomeGrid();
+                  initBaseMap();
                 }
 
                 function renderHomeGrid() {
-                  if (!DEFAULT_MAP_VIEW.showHomeGrid) {
+                  if (state.homeGridLayer) {
+                    state.homeGridLayer.remove();
+                    state.homeGridLayer = null;
+                  }
+                  if (!activeMapView.showHomeGrid) {
                     return;
                   }
-                  const bounds = gridBounds(DEFAULT_MAP_VIEW.centerGrid);
+                  const bounds = gridBounds(activeMapView.centerGrid);
                   if (!bounds) {
                     return;
                   }
-                  if (state.homeGridLayer) {
-                    state.homeGridLayer.remove();
-                  }
                   state.homeGridLayer = L.rectangle(bounds, {
-                    color: DEFAULT_MAP_VIEW.homeGridBorderColor,
+                    color: activeMapView.homeGridBorderColor,
                     weight: 3,
                     fill: false,
                     dashArray: "6 4",
                     interactive: true
                   })
-                    .bindPopup(`<div class="qsl-popup"><h3 class="qsl-popup-title">本台网格：${escapeHtml(DEFAULT_MAP_VIEW.centerGrid)}</h3></div>`)
+                    .bindPopup(`<div class="qsl-popup"><h3 class="qsl-popup-title">本台网格：${escapeHtml(activeMapView.centerGrid)}</h3></div>`)
                     .addTo(state.map);
                 }
 
@@ -501,7 +796,6 @@ public class QslGridMapPageRenderService {
                   if (validItems.length) {
                     hideNotice();
                   } else {
-                    state.map.setView(defaultMapCenter(), DEFAULT_MAP_VIEW.zoom);
                     showNotice("没有符合条件的 QSO 通联网格数据。");
                   }
                 }

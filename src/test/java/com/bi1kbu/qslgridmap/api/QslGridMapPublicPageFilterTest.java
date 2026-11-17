@@ -2,12 +2,17 @@ package com.bi1kbu.qslgridmap.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.bi1kbu.qslgridmap.front.QslGridMapPageRenderService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -29,11 +34,13 @@ class QslGridMapPublicPageFilterTest {
             .thenReturn(Mono.just(settings));
         var mapViewSettings = new QslGridMapPageRenderService.MapViewSettings();
         mapViewSettings.setDefaultCenterGrid("OM89");
-        mapViewSettings.setDefaultZoom(3);
-        mapViewSettings.setMinZoom(3);
-        mapViewSettings.setMaxZoom(8);
+        settings.setDefaultZoom(3);
+        settings.setMinZoom(3);
+        settings.setMaxZoom(8);
         when(settingFetcher.fetch("map", QslGridMapPageRenderService.MapViewSettings.class))
             .thenReturn(Mono.just(mapViewSettings));
+        when(settingFetcher.fetch("openfreemap", QslGridMapPageRenderService.ZoomSettings.class))
+            .thenReturn(Mono.empty());
         var request = MockServerHttpRequest.get(
             "/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page"
                 + "?embed=1&sceneType=QSO&dateFrom=2026-01-01&grid=om89&limit=500")
@@ -57,18 +64,68 @@ class QslGridMapPublicPageFilterTest {
             .contains("configured: true")
             .contains("appKey: \"official-key-123\"")
             .contains("centerGrid: \"OM89\"")
-            .contains("minZoom: Number(\"3\") || 3")
-            .contains("maxZoom: Number(\"8\") || 8")
+            .contains("minZoom: 3")
+            .contains("maxZoom: 8")
             .doesNotContain("qsl-grid-filter")
             .doesNotContain("qsl-list-panel")
             .doesNotContain("dateFrom")
             .doesNotContain("limit（上限）");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "/gridmap",
+        "/gridmap?url=https://example.com&redirect=//example.com&sceneType=SWL&embed=1"
+    })
+    void redirectsShortLinkToFixedPublicPageWithoutReadingSettings(String path) {
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get(path).build());
+        var chainCalled = new AtomicBoolean(false);
+
+        filter.filter(exchange, chain -> {
+            chainCalled.set(true);
+            return Mono.empty();
+        }).block();
+
+        assertThat(chainCalled).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(exchange.getResponse().getHeaders().getLocation()).hasToString(
+            "/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page");
+        assertThat(exchange.getResponse().getBodyAsString().block()).isEmpty();
+        verifyNoInteractions(settingFetcher);
+    }
+
     @Test
-    void leavesOtherRequestsToHaloChain() {
+    void shortLinkPreservesApplicationContextPath() {
+        var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/blog/gridmap")
+            .contextPath("/blog").build());
+
+        filter.filter(exchange, chain -> Mono.error(new AssertionError("短链接不应进入后续过滤链")))
+            .block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.FOUND);
+        assertThat(exchange.getResponse().getHeaders().getLocation()).hasToString(
+            "/blog/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page");
+        verifyNoInteractions(settingFetcher);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "POST, /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page",
+        "POST, /gridmap",
+        "PUT, /gridmap",
+        "PATCH, /gridmap",
+        "DELETE, /gridmap",
+        "HEAD, /gridmap",
+        "OPTIONS, /gridmap",
+        "GET, /gridmap/",
+        "GET, /gridmap/private",
+        "GET, /gridmap-other",
+        "GET, /Gridmap",
+        "GET, /apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page/private"
+    })
+    void leavesOtherRequestsToHaloChain(String method, String path) {
         var request = MockServerHttpRequest
-            .method(HttpMethod.POST, "/apis/qsl-grid-map.bi1kbu.com/v1alpha1/map/page")
+            .method(HttpMethod.valueOf(method), path)
             .build();
         var exchange = MockServerWebExchange.from(request);
         var chainCalled = new AtomicBoolean(false);
@@ -79,5 +136,7 @@ class QslGridMapPublicPageFilterTest {
         }).block();
 
         assertThat(chainCalled).isTrue();
+        assertThat(exchange.getResponse().getHeaders().getLocation()).isNull();
+        verifyNoInteractions(settingFetcher);
     }
 }
